@@ -1,0 +1,961 @@
+// MÓDULO DE ANÁLISE ESPACIAL AVANÇADA (BUFFER E SELEÇÃO LINEAR)
+
+(function() {
+    let activeBufferLayer     = null; // Camada Leaflet que exibe a área de influência (buffer)
+    let bufferDebounceTimer   = null; // Timer para evitar múltiplos cálculos enquanto arrasta o slider
+    let localidadesAfetadasList = []; // Cache das localidades afetadas pelo filtro atual
+
+    // Referências DOM
+    const selectInfovia     = document.getElementById("select-infovia");
+    const selectUF          = document.getElementById("select-uf");          // MELHORIA 4.2
+    const selectCategoriaCt = document.getElementById("select-categoria-ct"); // Filtro de Categoria Censo
+    const sliderDistancia   = document.getElementById("slider-distancia");
+    const labelDistancia    = document.getElementById("label-distancia");
+    const btnReset          = document.getElementById("btn-reset-filters");
+    
+    const statTotal     = document.getElementById("stat-total");
+    const statTotalPct  = document.getElementById("stat-total-pct");       // MELHORIA 4.1
+    const statSedes     = document.getElementById("stat-sedes");
+    const statSedesPct  = document.getElementById("stat-sedes-pct");       // MELHORIA 4.1
+    const statVilas     = document.getElementById("stat-vilas");
+    const statVilasPct  = document.getElementById("stat-vilas-pct");       // MELHORIA 4.1
+    const statRurais    = document.getElementById("stat-rurais");
+    const statRuraisPct = document.getElementById("stat-rurais-pct");      // MELHORIA 4.1
+    
+    const impactList = document.getElementById("impact-list");
+    const btnExport  = document.getElementById("btn-export-csv");
+    const btnReport  = document.getElementById("btn-generate-report"); // Novo botão de Relatório
+    const btnFocus   = document.getElementById("btn-focus-extent");
+    
+    // Controles do detalhamento de Categoria Censo (CT)
+    const ctBreakdownContainer = document.getElementById("ct-breakdown-container");
+    const btnToggleCtBreakdown = document.getElementById("btn-toggle-ct-breakdown");
+    const ctBreakdownChevron   = document.getElementById("ct-breakdown-chevron");
+    const ctBreakdownList      = document.getElementById("ct-breakdown-list");
+
+    function init() {
+        const map = window.map;
+        if (!map) {
+            setTimeout(init, 100);
+            return;
+        }
+
+        // Criar grupo para a camada de buffer e adicionar ao mapa
+        activeBufferLayer = L.featureGroup().addTo(map);
+
+        // Registrar eventos nos elementos da sidebar
+        if (sliderDistancia) {
+            sliderDistancia.addEventListener("input",  onSliderInput);
+            sliderDistancia.addEventListener("change", onSliderChange);
+        }
+        if (selectInfovia) {
+            selectInfovia.addEventListener("change", executarAnaliseEspacial);
+        }
+        // MELHORIA 4.2: Filtro por UF reexecuta análise
+        if (selectUF) {
+            selectUF.addEventListener("change", executarAnaliseEspacial);
+        }
+        // Filtro por Categoria Censo reexecuta análise
+        if (selectCategoriaCt) {
+            selectCategoriaCt.addEventListener("change", executarAnaliseEspacial);
+        }
+        if (btnReset) {
+            btnReset.addEventListener("click", resetarFiltros);
+        }
+        if (btnExport) {
+            btnExport.addEventListener("click", exportarDadosParaCSV);
+        }
+        if (btnReport) {
+            btnReport.addEventListener("click", gerarRelatorioHTML);
+        }
+        if (btnToggleCtBreakdown) {
+            btnToggleCtBreakdown.addEventListener("click", toggleCtBreakdownPanel);
+        }
+        if (btnFocus) {
+            btnFocus.addEventListener("click", enquadrarInfoviasNoMapa);
+        }
+
+        // Sincronizar clique nas linhas de infovia para ativar análise imediata na Sidebar
+        sincronizarCliqueNasInfovias();
+    }
+
+    // Alterna a exibição do detalhamento de categorias do Censo (CT) na sidebar
+    function toggleCtBreakdownPanel() {
+        if (!ctBreakdownList || !btnToggleCtBreakdown) return;
+        
+        const isCollapsed = (ctBreakdownList.style.display === "none" || ctBreakdownList.style.display === "");
+        
+        if (isCollapsed) {
+            ctBreakdownList.style.display = "flex";
+            btnToggleCtBreakdown.classList.add("active");
+        } else {
+            ctBreakdownList.style.display = "none";
+            btnToggleCtBreakdown.classList.remove("active");
+        }
+    }
+
+    // Evento contínuo ao arrastar o slider (atualiza apenas o texto para performance)
+    function onSliderInput(e) {
+        const valor = e.target.value;
+        if (labelDistancia) {
+            labelDistancia.textContent = `${valor} km`;
+        }
+        
+        // Limpar timer anterior do debounce
+        if (bufferDebounceTimer) {
+            clearTimeout(bufferDebounceTimer);
+        }
+
+        // Configura debounce de 150ms para recalcular a geometria apenas quando o usuário desacelerar o arrasto
+        bufferDebounceTimer = setTimeout(() => {
+            executarAnaliseEspacial();
+        }, 150);
+    }
+
+    // Evento disparado quando o usuário solta o mouse do slider (garantia de cálculo final)
+    function onSliderChange() {
+        if (bufferDebounceTimer) {
+            clearTimeout(bufferDebounceTimer);
+        }
+        executarAnaliseEspacial();
+    }
+
+    // Executa o processamento espacial usando Turf.js
+    function executarAnaliseEspacial() {
+        const raioKm           = parseFloat(sliderDistancia.value);
+        const infoviaSelecionada = selectInfovia ? selectInfovia.value : "all";
+        const ufSelecionada    = selectUF ? selectUF.value : "all";  // MELHORIA 4.2
+        const categoriaSelecionada = selectCategoriaCt ? selectCategoriaCt.value : "all"; // Filtro de Categoria Censo
+
+        // Filtrar visualmente as bolinhas no mapa de acordo com o estado e categoria selecionados
+        if (window.filtrarLocalidadesNoMapa) {
+            window.filtrarLocalidadesNoMapa(ufSelecionada, categoriaSelecionada);
+        }
+
+        // Limpar destaques e camadas de buffer anteriores
+        limparCamadaBuffer();
+        restaurarEstiloOriginalLocalidades();
+        localidadesAfetadasList = [];
+
+        // Atualizar estatísticas se o raio for 0 (reseta para zero e limpa lista)
+        if (raioKm === 0) {
+            atualizarEstatisticasSidebar([], 0);
+            atualizarListaSidebar([]);
+            return;
+        }
+
+        const dataLinhas = window.geoportalData.infovias;
+        const dataPontos = window.geoportalData.localidades;
+
+        if (!dataLinhas || !dataPontos) {
+            console.warn("Aguardando carregamento completo dos dados GeoJSON.");
+            return;
+        }
+
+        console.time("Processamento Turf.js");
+
+        // 1. Filtrar as linhas de infovia selecionadas
+        let linhasParaBuffer = [];
+        if (infoviaSelecionada === "all") {
+            linhasParaBuffer = dataLinhas.features;
+        } else {
+            linhasParaBuffer = dataLinhas.features.filter(f => f.properties.KML_FOLDER === infoviaSelecionada);
+        }
+
+        if (linhasParaBuffer.length === 0) {
+            console.warn("Nenhuma linha de infovia selecionada para gerar buffer.");
+            atualizarEstatisticasSidebar([], 0);
+            atualizarListaSidebar([]);
+            return;
+        }
+
+        // Criar uma FeatureCollection com as linhas selecionadas
+        const featureCollectionLinhas = turf.featureCollection(linhasParaBuffer);
+
+        // 2. Gerar o polígono de Buffer ao redor das linhas selecionadas
+        const bufferGeoJSON = turf.buffer(featureCollectionLinhas, raioKm, { units: 'kilometers' });
+
+        // 3. Adicionar o polígono de buffer ao mapa com estilização suave e moderna (Glassmorphism cian)
+        L.geoJSON(bufferGeoJSON, {
+            style: {
+                color: '#00f2fe',
+                weight: 1.5,
+                fillColor: '#00f2fe',
+                fillOpacity: 0.12,
+                opacity: 0.5
+            }
+        }).addTo(activeBufferLayer);
+
+        // 4. Filtrar quais localidades estão dentro da geometria do buffer
+        // MELHORIA 4.2: Aplicar também o filtro de UF e Categoria Censo
+        const localidadesFeatures = dataPontos.features;
+        let totalSedes = 0, totalVilas = 0, totalRurais = 0;
+
+        localidadesFeatures.forEach(localidade => {
+            // MELHORIA 4.2: pular localidades de outra UF se filtro ativo
+            if (ufSelecionada !== "all" && localidade.properties.SIGLA_UF !== ufSelecionada) return;
+
+            // Pular localidades de outra categoria censo se filtro ativo
+            if (categoriaSelecionada !== "all" && localidade.properties.CT_LOCALIDADE !== categoriaSelecionada) return;
+
+            // Verificação espacial robusta contra FeatureCollection retornado pelo Turf.js
+            let estaDentro = false;
+            if (bufferGeoJSON.type === "FeatureCollection") {
+                for (let i = 0; i < bufferGeoJSON.features.length; i++) {
+                    const poly = bufferGeoJSON.features[i];
+                    if (poly.geometry && turf.booleanPointInPolygon(localidade.geometry, poly)) {
+                        estaDentro = true;
+                        break;
+                    }
+                }
+            } else {
+                estaDentro = turf.booleanPointInPolygon(localidade.geometry, bufferGeoJSON);
+            }
+
+            if (estaDentro) {
+                localidadesAfetadasList.push(localidade);
+
+                // Incrementar estatísticas por categoria
+                const cat = localidade.properties.CATEGORIA_MAPA;
+                if (cat === 'Sede') totalSedes++;
+                else if (cat === 'Vila') totalVilas++;
+                else if (cat === 'Rural') totalRurais++;
+
+                // Destaque visual no Leaflet CircleMarker / Marker DOM
+                if (localidade._markerRef) {
+                    localidade._markerRef.setStyle({
+                        radius: 8.5,
+                        color: '#00f2fe', // Borda Cyan neon
+                        weight: 3.5,
+                        fillOpacity: 1.0
+                    });
+                }
+            }
+        });
+
+        console.timeEnd("Processamento Turf.js");
+        console.log(`Análise concluída: ${localidadesAfetadasList.length} comunidades afetadas.`);
+
+        // 5. Atualizar os cartões e a lista da Sidebar
+        atualizarEstatisticasSidebar(localidadesAfetadasList, raioKm);
+        atualizarListaSidebar(localidadesAfetadasList);
+    }
+
+    // Remove o polígono de buffer do mapa
+    function limparCamadaBuffer() {
+        if (activeBufferLayer) {
+            activeBufferLayer.clearLayers();
+        }
+    }
+
+    // Restaura as propriedades padrão de raio e borda de todos os circleMarkers
+    function restaurarEstiloOriginalLocalidades() {
+        const dataPontos = window.geoportalData.localidades;
+        if (!dataPontos) return;
+
+        dataPontos.features.forEach(localidade => {
+            if (localidade._markerRef) {
+                const originalColor = window.obterCorPorCT(localidade.properties.CT_LOCALIDADE);
+                
+                localidade._markerRef.setStyle({
+                    radius: 7,
+                    color: '#ffffff',
+                    weight: 1.5,
+                    fillOpacity: 0.92,
+                    fillColor: originalColor
+                });
+            }
+        });
+    }
+
+    // MELHORIA 4.1: Atualiza contadores + percentuais + gráfico SVG
+    function atualizarEstatisticasSidebar(afetadas, raioKm) {
+        const total = afetadas.length;
+        const totalGeral = 11186; // Total fixo de localidades na base
+
+        if (statTotal) statTotal.textContent = total.toLocaleString('pt-BR');
+
+        let totalSedes = 0, totalVilas = 0, totalRurais = 0;
+        afetadas.forEach(loc => {
+            const cat = loc.properties.CATEGORIA_MAPA;
+            if (cat === 'Sede') totalSedes++;
+            else if (cat === 'Vila') totalVilas++;
+            else if (cat === 'Rural') totalRurais++;
+        });
+
+        if (statSedes)  statSedes.textContent  = totalSedes.toLocaleString('pt-BR');
+        if (statVilas)  statVilas.textContent  = totalVilas.toLocaleString('pt-BR');
+        if (statRurais) statRurais.textContent = totalRurais.toLocaleString('pt-BR');
+
+        // MELHORIA 4.1: Percentuais em relação ao total geral
+        const pctTotal  = total > 0 ? ((total  / totalGeral) * 100).toFixed(1) : 0;
+        const pctSedes  = total > 0 ? ((totalSedes  / total) * 100).toFixed(0) : 0;
+        const pctVilas  = total > 0 ? ((totalVilas  / total) * 100).toFixed(0) : 0;
+        const pctRurais = total > 0 ? ((totalRurais / total) * 100).toFixed(0) : 0;
+
+        if (statTotalPct)  statTotalPct.textContent  = `${pctTotal}% do total`;
+        if (statSedesPct)  statSedesPct.textContent  = `${pctSedes}%`;
+        if (statVilasPct)  statVilasPct.textContent  = `${pctVilas}%`;
+        if (statRuraisPct) statRuraisPct.textContent = `${pctRurais}%`;
+
+        // MELHORIA 4.3: Atualizar gráfico SVG de composição
+        atualizarGraficoSVG(totalSedes, totalVilas, totalRurais, total);
+
+        // Atualizar detalhamento de categorias do Censo (CT_LOCALIDADE) na sidebar
+        if (ctBreakdownList) {
+            ctBreakdownList.innerHTML = "";
+        }
+
+        if (total === 0) {
+            if (ctBreakdownContainer) ctBreakdownContainer.style.display = "none";
+            if (ctBreakdownList) {
+                ctBreakdownList.style.display = "none";
+            }
+            if (btnToggleCtBreakdown) {
+                btnToggleCtBreakdown.classList.remove("active");
+            }
+        } else {
+            if (ctBreakdownContainer) ctBreakdownContainer.style.display = "block";
+
+            // Contar ocorrências por Categoria Censo (CT_LOCALIDADE)
+            const ctCounts = {};
+            afetadas.forEach(loc => {
+                const ct = loc.properties.CT_LOCALIDADE || "Outras Localidades";
+                ctCounts[ct] = (ctCounts[ct] || 0) + 1;
+            });
+
+            // Converter para array e ordenar decrescente pelo count
+            const ctList = Object.keys(ctCounts).map(name => {
+                return { name: name, count: ctCounts[name] };
+            }).sort((a, b) => b.count - a.count);
+
+            // Injetar na UI de forma de alta densidade
+            if (ctBreakdownList) {
+                ctList.forEach(item => {
+                    const dotColor = window.obterCorPorCT(item.name);
+                    const pct = ((item.count / total) * 100).toFixed(1);
+                    const itemDiv = document.createElement("div");
+                    itemDiv.className = "ct-breakdown-item";
+                    itemDiv.innerHTML = `
+                        <div class="ct-breakdown-label">
+                            <span class="ct-breakdown-dot" style="background-color: ${dotColor}"></span>
+                            <span>${item.name}</span>
+                        </div>
+                        <div class="ct-breakdown-values">
+                            <span class="ct-breakdown-badge">${item.count}</span>
+                            <span class="ct-breakdown-pct">${pct}%</span>
+                        </div>
+                    `;
+                    ctBreakdownList.appendChild(itemDiv);
+                });
+            }
+        }
+
+        // Habilitar/desabilitar botão de exportação CSV e Relatório
+        if (btnExport) {
+            btnExport.disabled = (total === 0);
+        }
+        if (btnReport) {
+            btnReport.disabled = (total === 0);
+        }
+    }
+
+    // MELHORIA 4.3: Gráfico de barras horizontais em SVG puro
+    function atualizarGraficoSVG(sedes, vilas, rurais, total) {
+        const chartContainer = document.getElementById("chart-container");
+        const chartSedes  = document.getElementById("chart-sedes");
+        const chartVilas  = document.getElementById("chart-vilas");
+        const chartRurais = document.getElementById("chart-rurais");
+
+        if (!chartContainer || !chartSedes || !chartVilas || !chartRurais) return;
+
+        if (total === 0) {
+            chartContainer.style.display = "none";
+            return;
+        }
+
+        chartContainer.style.display = "block";
+
+        // Calcular larguras proporcionais (viewBox de 100 unidades de largura)
+        const wSedes  = (sedes  / total) * 100;
+        const wVilas  = (vilas  / total) * 100;
+        const wRurais = (rurais / total) * 100;
+
+        // Gap entre barras: 1 unidade
+        const gap = total > 0 ? 1 : 0;
+        let x = 0;
+
+        // Sedes (vermelha)
+        chartSedes.setAttribute("x", x.toFixed(2));
+        chartSedes.setAttribute("width", Math.max(0, wSedes - (vilas > 0 ? gap : 0)).toFixed(2));
+        x += wSedes;
+
+        // Vilas (amarela)
+        chartVilas.setAttribute("x", x.toFixed(2));
+        chartVilas.setAttribute("width", Math.max(0, wVilas - (rurais > 0 ? gap : 0)).toFixed(2));
+        x += wVilas;
+
+        // Rurais (verde)
+        chartRurais.setAttribute("x", x.toFixed(2));
+        chartRurais.setAttribute("width", Math.max(0, wRurais).toFixed(2));
+    }
+
+    // Renderiza os itens de localidades afetadas na barra lateral
+    function atualizarListaSidebar(afetadas) {
+        if (!impactList) return;
+        impactList.innerHTML = "";
+
+        if (afetadas.length === 0) {
+            impactList.innerHTML = `
+                <div class="content" style="color: var(--text-muted); text-align: center; padding: 20px 0; font-size: 12px;">
+                    Aumente o raio de proximidade para listar as comunidades impactadas ao redor das infovias.
+                </div>
+            `;
+            return;
+        }
+
+        // Ordenar afetadas por categoria (Sede -> Vila -> Rural) e depois por nome
+        const afetadasOrdenadas = [...afetadas].sort((a, b) => {
+            const catOrder = { 'Sede': 3, 'Vila': 2, 'Rural': 1 };
+            const diff = catOrder[b.properties.CATEGORIA_MAPA] - catOrder[a.properties.CATEGORIA_MAPA];
+            if (diff !== 0) return diff;
+            return a.properties.NM_LOCALIDADE.localeCompare(b.properties.NM_LOCALIDADE);
+        });
+
+        // Limitamos a exibição na interface a 50 itens para garantir rolagem lisa
+        const limiteUI  = 50;
+        const itensExibir = afetadasOrdenadas.slice(0, limiteUI);
+
+        itensExibir.forEach(loc => {
+            const props   = loc.properties;
+            const itemDiv = document.createElement("div");
+            itemDiv.className = "impact-item";
+            
+            const badgeClass  = props.CATEGORIA_MAPA.toLowerCase();
+            const rotuloCat   = props.CATEGORIA_MAPA === 'Sede' ? 'Sede Municipal' : (props.CATEGORIA_MAPA === 'Vila' ? 'Vila' : 'Lugar Rural');
+            
+            itemDiv.innerHTML = `
+                <div>
+                    <div class="name-uf" title="${props.NM_LOCALIDADE}">${props.NM_LOCALIDADE} (${props.SIGLA_UF})</div>
+                    <div class="mun">${props.NM_MUN || 'Município não cadastrado'}</div>
+                </div>
+                <span class="prio-badge ${badgeClass}">${rotuloCat}</span>
+            `;
+
+            // Clique na linha da sidebar foca e abre o popup da comunidade no mapa
+            itemDiv.style.cursor = 'pointer';
+            itemDiv.addEventListener("click", () => {
+                const coords = loc.geometry.coordinates;
+                const map    = window.map;
+                // Centralizar e aplicar zoom
+                map.setView([coords[1], coords[0]], 12);
+                
+                // Se a camada de pontos estiver desativada, ativa
+                window.GeoportalState.atualizarCamada('camadaPontos', true);
+
+                // Esperar o mapa mover e abrir o popup
+                setTimeout(() => {
+                    if (loc._markerRef) {
+                        loc._markerRef.openPopup();
+                    }
+                }, 300);
+            });
+
+            impactList.appendChild(itemDiv);
+        });
+
+        // Caso haja mais itens que o limite da interface, informa o usuário
+        if (afetadasOrdenadas.length > limiteUI) {
+            const avisoMaisItens = document.createElement("div");
+            avisoMaisItens.style.cssText = "font-size: 11px; color: var(--text-muted); text-align: center; padding: 10px 0; border-top: 1px solid var(--border-glass); margin-top: 5px;";
+            avisoMaisItens.textContent = `Exibindo as primeiras ${limiteUI} de ${afetadasOrdenadas.length} comunidades. Use a exportação CSV para baixar a lista completa.`;
+            impactList.appendChild(avisoMaisItens);
+        }
+    }
+
+    // Configura a Seleção Linear a partir de um clique direto na infovia do mapa
+    function sincronizarCliqueNasInfovias() {
+        // Aguarda a inicialização da camada de infovias no app.js
+        const checkLayersExist = setInterval(() => {
+            if (window.geoportalLayers.infoviasLayer) {
+                clearInterval(checkLayersExist);
+                
+                window.geoportalLayers.infoviasLayer.on("click", (e) => {
+                    const feature = e.propagatedFrom.feature; // Feição da linha clicada
+                    if (!feature) return;
+                    
+                    const infoviaNome = feature.properties.KML_FOLDER;
+                    
+                    if (infoviaNome && selectInfovia) {
+                        // Sincronizar selectbox lateral
+                        selectInfovia.value = infoviaNome;
+                        console.log(`Seleção Linear ativada para infovia: ${infoviaNome}`);
+                        
+                        // Se o raio estiver em 0, define automaticamente para 10 km para mostrar comunidades
+                        if (parseFloat(sliderDistancia.value) === 0) {
+                            sliderDistancia.value = 10;
+                            if (labelDistancia) labelDistancia.textContent = "10 km";
+                        }
+                        
+                        executarAnaliseEspacial();
+                    }
+                });
+            }
+        }, 200);
+    }
+
+    // Reseta todos os filtros para o estado padrão
+    function resetarFiltros() {
+        if (selectInfovia)     selectInfovia.value     = "all";
+        if (selectUF)          selectUF.value          = "all";  // MELHORIA 4.2
+        if (selectCategoriaCt) selectCategoriaCt.value = "all";  // Reseta Categoria Censo
+        if (sliderDistancia) {
+            sliderDistancia.value = 0;
+            if (labelDistancia) labelDistancia.textContent = "0 km";
+        }
+        executarAnaliseEspacial();
+        
+        // Centralizar o mapa na visão geral
+        enquadrarInfoviasNoMapa();
+    }
+
+    // Enquadra a tela nas extensões das infovias selecionadas
+    function enquadrarInfoviasNoMapa() {
+        const infoviaSelecionada = selectInfovia ? selectInfovia.value : "all";
+        const layerInfovias = window.geoportalLayers.infoviasLayer;
+        
+        if (!layerInfovias) return;
+
+        if (infoviaSelecionada === "all") {
+            window.map.fitBounds(layerInfovias.getBounds(), { padding: [30, 30] });
+        } else {
+            // Filtrar as sub-camadas (linhas individuais) que coincidem com a infovia selecionada
+            const bounds = L.latLngBounds();
+            layerInfovias.eachLayer(layer => {
+                if (layer.feature && layer.feature.properties.KML_FOLDER === infoviaSelecionada) {
+                    if (layer.getBounds) {
+                        bounds.extend(layer.getBounds());
+                    }
+                }
+            });
+            if (bounds.isValid()) {
+                window.map.fitBounds(bounds, { padding: [50, 50] });
+            }
+        }
+    }
+
+    // Gera e baixa o arquivo CSV com todas as comunidades na área de influência
+    function exportarDadosParaCSV() {
+        if (localidadesAfetadasList.length === 0) return;
+
+        console.log("Iniciando exportação de CSV...");
+        
+        // Cabeçalho do CSV
+        let csvContent = "Nome_Localidade;Estado_UF;Municipio;Categoria_Censo;Classificacao_Mapa;Latitude;Longitude\n";
+        
+        // Corpo do CSV
+        localidadesAfetadasList.forEach(loc => {
+            const props  = loc.properties;
+            const coords = loc.geometry.coordinates; // [lng, lat]
+            
+            // Escapar ponto e vírgula e aspas
+            const nome      = (props.NM_LOCALIDADE || "").replace(/;/g, ",").replace(/"/g, '""');
+            const uf        = props.SIGLA_UF || "";
+            const mun       = (props.NM_MUN  || "").replace(/;/g, ",").replace(/"/g, '""');
+            const cat       = props.CT_LOCALIDADE || "";
+            const classeMapa = props.CATEGORIA_MAPA === 'Sede' ? 'Sede Municipal' : (props.CATEGORIA_MAPA === 'Vila' ? 'Vila' : 'Lugar Rural');
+            const lat       = coords[1].toFixed(6);
+            const lng       = coords[0].toFixed(6);
+            
+            csvContent += `"${nome}";"${uf}";"${mun}";"${cat}";"${classeMapa}";${lat};${lng}\n`;
+        });
+
+        // Gerar o Blob e forçar download
+        const blob = new Blob(["\ufeff" + csvContent], { type: "text/csv;charset=utf-8;" }); // \ufeff ativa suporte a acentos no Excel
+        const url  = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        
+        const infoviaNome = selectInfovia && selectInfovia.value !== "all" ? selectInfovia.value.replace(/\s+/g, "_") : "Geral";
+        const raio        = sliderDistancia ? sliderDistancia.value : 0;
+        
+        link.setAttribute("href",     url);
+        link.setAttribute("download", `comunidades_impactadas_infovia_${infoviaNome}_raio_${raio}km.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        console.log("Exportação para CSV concluída com sucesso.");
+    }
+
+    // Gera o relatório analítico formatado em HTML para visualização e impressão/PDF
+    function gerarRelatorioHTML() {
+        if (localidadesAfetadasList.length === 0) return;
+
+        console.log("Iniciando geração de relatório HTML...");
+
+        // Coletar parâmetros atuais da análise
+        const infoviaSelecionada = selectInfovia && selectInfovia.value !== "all" ? selectInfovia.value : "Todas as Infovias (Geral)";
+        const ufSelecionada = selectUF && selectUF.value !== "all" ? selectUF.value : "Todos os Estados";
+        const categoriaSelecionada = selectCategoriaCt && selectCategoriaCt.value !== "all" ? selectCategoriaCt.value : "Todas as Categorias";
+        const raio = sliderDistancia ? sliderDistancia.value : 0;
+        const dataEmissao = new Date().toLocaleString('pt-BR');
+
+        // Calcular estatísticas das localidades afetadas
+        let totalSedes = 0, totalVilas = 0, totalRurais = 0;
+        localidadesAfetadasList.forEach(loc => {
+            const cat = loc.properties.CATEGORIA_MAPA;
+            if (cat === 'Sede') totalSedes++;
+            else if (cat === 'Vila') totalVilas++;
+            else if (cat === 'Rural') totalRurais++;
+        });
+        const total = localidadesAfetadasList.length;
+
+        // Ordenar as localidades para o relatório (Sede -> Vila -> Rural, depois por Nome)
+        const afetadasOrdenadas = [...localidadesAfetadasList].sort((a, b) => {
+            const catOrder = { 'Sede': 3, 'Vila': 2, 'Rural': 1 };
+            const diff = catOrder[b.properties.CATEGORIA_MAPA] - catOrder[a.properties.CATEGORIA_MAPA];
+            if (diff !== 0) return diff;
+            return a.properties.NM_LOCALIDADE.localeCompare(b.properties.NM_LOCALIDADE);
+        });
+
+        // Gerar linhas da tabela
+        let tabelaLinhasHtml = "";
+        afetadasOrdenadas.forEach((loc, index) => {
+            const props = loc.properties;
+            const coords = loc.geometry.coordinates; // [lng, lat]
+            const rotuloCat = props.CATEGORIA_MAPA === 'Sede' ? 'Sede Municipal' : (props.CATEGORIA_MAPA === 'Vila' ? 'Vila' : 'Lugar Rural');
+            
+            tabelaLinhasHtml += `
+                <tr>
+                    <td style="text-align: center;">${index + 1}</td>
+                    <td><strong>${props.NM_LOCALIDADE || 'N/A'}</strong></td>
+                    <td>${props.NM_MUN || 'N/A'} (${props.SIGLA_UF || 'N/A'})</td>
+                    <td>${props.CT_LOCALIDADE || 'N/A'}</td>
+                    <td style="text-align: center;">
+                        <span class="prio-tag ${props.CATEGORIA_MAPA.toLowerCase()}">${rotuloCat}</span>
+                    </td>
+                    <td style="font-family: monospace; font-size: 11px; text-align: center;">
+                        ${coords[1].toFixed(6)}, ${coords[0].toFixed(6)}
+                    </td>
+                </tr>
+            `;
+        });
+
+        // Contar ocorrências por Categoria Censo (CT_LOCALIDADE) no relatório
+        const ctCountsReport = {};
+        localidadesAfetadasList.forEach(loc => {
+            const ct = loc.properties.CT_LOCALIDADE || "Outras Localidades";
+            ctCountsReport[ct] = (ctCountsReport[ct] || 0) + 1;
+        });
+
+        const ctListReport = Object.keys(ctCountsReport).map(name => {
+            return { name: name, count: ctCountsReport[name] };
+        }).sort((a, b) => b.count - a.count);
+
+        let ctBreakdownHtml = "";
+        ctListReport.forEach(item => {
+            const dotColor = window.obterCorPorCT(item.name);
+            const pct = ((item.count / total) * 100).toFixed(1);
+            ctBreakdownHtml += `
+                <div style="display: flex; align-items: center; justify-content: space-between; font-size: 11px; padding: 6px 10px; background: #f8fafc; border: 1px solid var(--border); border-radius: 6px;">
+                    <div style="display: flex; align-items: center; gap: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 70%;">
+                        <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background-color: ${dotColor}; border: 1px solid rgba(0,0,0,0.15);"></span>
+                        <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${item.name}</span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span style="font-weight: 700; background: rgba(0,0,0,0.05); padding: 2px 6px; border-radius: 4px; font-size: 10px;">${item.count}</span>
+                        <span style="font-size: 9px; color: #64748b; width: 40px; text-align: right;">${pct}%</span>
+                    </div>
+                </div>
+            `;
+        });
+
+        // Montar o documento HTML do relatório
+        const htmlContent = `
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Relatório de Impacto - Geoportal InfoVias</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <style>
+        /* Estilos de tela */
+        :root {
+            --primary: #1e293b;
+            --primary-light: #334155;
+            --accent: #0088ff;
+            --accent-cyan: #09a5b3;
+            --sede: #ff3366;
+            --vila: #ff9f00;
+            --rural: #00e676;
+            --border: #e2e8f0;
+            --bg-body: #f8fafc;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Inter', sans-serif; background-color: var(--bg-body); color: #1e293b; padding: 0 0 40px 0; line-height: 1.5; }
+        
+        .no-print-bar {
+            background-color: var(--primary);
+            padding: 12px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: white;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 16px; letter-spacing: 0.5px; }
+        .brand i { color: #00f2fe; }
+        .action-buttons { display: flex; gap: 10px; }
+        .btn {
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s;
+        }
+        .btn-primary { background-color: var(--accent); color: white; }
+        .btn-primary:hover { background-color: #0077e6; }
+        .btn-secondary { background-color: rgba(255,255,255,0.1); color: white; }
+        .btn-secondary:hover { background-color: rgba(255,255,255,0.2); }
+
+        .container { max-width: 1000px; margin: 30px auto; padding: 0 20px; }
+        
+        .report-header {
+            background: white;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 24px;
+            margin-bottom: 24px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+        }
+        .report-title-section {
+            border-bottom: 2px solid var(--border);
+            padding-bottom: 16px;
+            margin-bottom: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+        .report-title-section h1 { font-size: 20px; font-weight: 700; color: var(--primary); }
+        .report-meta { font-size: 12px; color: #64748b; margin-top: 4px; }
+        
+        .params-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            background: #f1f5f9;
+            padding: 16px;
+            border-radius: 8px;
+            font-size: 12px;
+        }
+        .param-item span { display: block; }
+        .param-label { font-weight: 600; color: #475569; text-transform: uppercase; font-size: 10px; margin-bottom: 2px; }
+        .param-val { color: var(--primary-light); font-weight: 500; font-size: 12px; }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        .stat-card {
+            background: white;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 16px;
+            text-align: center;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+            position: relative;
+            overflow: hidden;
+        }
+        .stat-card.total { border-left: 4px solid var(--accent); }
+        .stat-card.sede { border-left: 4px solid var(--sede); }
+        .stat-card.vila { border-left: 4px solid var(--vila); }
+        .stat-card.rural { border-left: 4px solid var(--rural); }
+        .stat-label { font-size: 10px; text-transform: uppercase; font-weight: 600; color: #64748b; margin-bottom: 4px; }
+        .stat-val { font-size: 24px; font-weight: 700; color: var(--primary); }
+
+        .table-card {
+            background: white;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+        }
+        .table-card h3 { font-size: 14px; font-weight: 700; color: var(--primary); padding: 16px 20px; border-bottom: 1px solid var(--border); background: #fafafa; }
+        
+        table { width: 100%; border-collapse: collapse; text-align: left; font-size: 12px; }
+        th { background: #f8fafc; color: #475569; font-weight: 600; padding: 12px 16px; border-bottom: 1px solid var(--border); text-transform: uppercase; font-size: 10px; }
+        td { padding: 12px 16px; border-bottom: 1px solid var(--border); color: #334155; }
+        tr:last-child td { border-bottom: none; }
+        tr:nth-child(even) { background-color: #f8fafc; }
+
+        .prio-tag {
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 9px;
+            font-weight: 600;
+            text-transform: uppercase;
+            display: inline-block;
+        }
+        .prio-tag.sede { background-color: rgba(255, 51, 102, 0.1); color: var(--sede); border: 1px solid rgba(255, 51, 102, 0.2); }
+        .prio-tag.vila { background-color: rgba(255, 159, 0, 0.1); color: var(--vila); border: 1px solid rgba(255, 159, 0, 0.2); }
+        .prio-tag.rural { background-color: rgba(0, 230, 118, 0.1); color: var(--rural); border: 1px solid rgba(0, 230, 118, 0.2); }
+
+        /* Estilos de impressão */
+        @media print {
+            .no-print-bar { display: none !important; }
+            body { background: white; color: black; padding: 0; }
+            .container { max-width: 100%; margin: 0; padding: 0; }
+            .report-header { border: 1px solid #94a3b8; box-shadow: none; border-radius: 0; }
+            .stats-grid { gap: 10px; }
+            .stat-card { border: 1px solid #94a3b8; box-shadow: none; border-radius: 0; }
+            .table-card { border: 1px solid #94a3b8; box-shadow: none; border-radius: 0; }
+            table { font-size: 11px; }
+            th { border-bottom: 2px solid #000; background: #e2e8f0; color: black; }
+            td { border-bottom: 1px solid #e2e8f0; }
+            .prio-tag { border: 1px solid #94a3b8 !important; background: transparent !important; color: black !important; }
+            
+            /* Controle de quebras de página */
+            table { page-break-inside: auto; }
+            tr { page-break-inside: avoid; page-break-after: auto; }
+            thead { display: table-header-group; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- BARRA FLUTUANTE (Não imprimível) -->
+    <div class="no-print-bar">
+        <div class="brand">
+            <i class="fa-solid fa-file-pdf"></i>
+            <span>Relatório Analítico Geoportal</span>
+        </div>
+        <div class="action-buttons">
+            <button class="btn btn-primary" onclick="window.print()">
+                <i class="fa-solid fa-print"></i> Imprimir ou Salvar PDF
+            </button>
+            <button class="btn btn-secondary" onclick="window.close()">
+                <i class="fa-solid fa-xmark"></i> Fechar Relatório
+            </button>
+        </div>
+    </div>
+
+    <div class="container">
+        
+        <!-- CABEÇALHO DO RELATÓRIO -->
+        <div class="report-header">
+            <div class="report-title-section">
+                <div>
+                    <h1>Relatório de Impacto Socioeconômico</h1>
+                    <div class="report-meta">Geoportal das InfoVias da Região Norte &bull; Gerado em: ${dataEmissao}</div>
+                </div>
+                <div style="text-align: right; font-size: 11px; color: #64748b; line-height: 1.4;">
+                    <strong>Território Digital &amp; IGeoTecnologia</strong><br>
+                    Filtro Espacial Avançado
+                </div>
+            </div>
+            
+            <!-- PARÂMETROS APLICADOS -->
+            <div class="params-grid">
+                <div class="param-item">
+                    <span class="param-label">Infovia Analisada</span>
+                    <span class="param-val">${infoviaSelecionada}</span>
+                </div>
+                <div class="param-item">
+                    <span class="param-label">Raio de Influência (Buffer)</span>
+                    <span class="param-val">${raio} km</span>
+                </div>
+                <div class="param-item">
+                    <span class="param-label">Filtro de Estado (UF)</span>
+                    <span class="param-val">${ufSelecionada}</span>
+                </div>
+                <div class="param-item">
+                    <span class="param-label">Filtro de Categoria (Censo)</span>
+                    <span class="param-val">${categoriaSelecionada}</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- CARDS DE ESTATÍSTICA -->
+        <div class="stats-grid">
+            <div class="stat-card total">
+                <div class="stat-label">Comunidades Afetadas</div>
+                <div class="stat-val">${total}</div>
+            </div>
+            <div class="stat-card sede">
+                <div class="stat-label">Sedes Municipais</div>
+                <div class="stat-val">${totalSedes}</div>
+            </div>
+            <div class="stat-card vila">
+                <div class="stat-label">Vilas</div>
+                <div class="stat-val">${totalVilas}</div>
+            </div>
+            <div class="stat-card rural">
+                <div class="stat-label">Lugares Rurais</div>
+                <div class="stat-val">${totalRurais}</div>
+            </div>
+        </div>
+
+        <!-- DETALHAMENTO DE CATEGORIAS DO CENSO (CT) -->
+        <div class="table-card" style="margin-bottom: 24px; page-break-inside: avoid;">
+            <h3 style="font-size: 14px; font-weight: 700; color: var(--primary); padding: 16px 20px; border-bottom: 1px solid var(--border); background: #fafafa;">
+                Distribuição por Categoria do Censo (CT)
+            </h3>
+            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; padding: 20px;">
+                ${ctBreakdownHtml}
+            </div>
+        </div>
+        
+        <!-- TABELA DE RESULTADOS -->
+        <div class="table-card">
+            <h3>Relação Detalhada de Comunidades no Raio de Influência (${total} itens)</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 50px; text-align: center;">#</th>
+                        <th>Nome da Comunidade</th>
+                        <th>Município / UF</th>
+                        <th>Categoria (Censo)</th>
+                        <th style="width: 150px; text-align: center;">Classificação</th>
+                        <th style="width: 180px; text-align: center;">Coordenadas (Lat, Lng)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${tabelaLinhasHtml}
+                </tbody>
+            </table>
+        </div>
+
+    </div>
+
+</body>
+</html>
+        `;
+
+        // Abrir a nova aba e injetar o HTML
+        const novaAba = window.open();
+        if (novaAba) {
+            novaAba.document.write(htmlContent);
+            novaAba.document.close();
+            console.log("Relatório gerado e aberto com sucesso em uma nova aba.");
+        } else {
+            alert("Não foi possível abrir o relatório em uma nova aba. Verifique se o bloqueador de popups do seu navegador está ativo!");
+            console.warn("Popups bloqueados pelo navegador. Não foi possível abrir o relatório.");
+        }
+    }
+
+    // Inicializar o módulo
+    init();
+})();

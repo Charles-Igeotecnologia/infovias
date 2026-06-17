@@ -1,0 +1,21 @@
+import http.server
+import socketserver
+
+PORT = 8000
+
+class NoCacheHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
+    def end_headers(self):
+        # Desativa completamente o cache do navegador para desenvolvimento ativo
+        self.send_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+        self.send_header('Pragma', 'no-cache')
+        self.send_header('Expires', '0')
+        super().end_headers()
+
+if __name__ == "__main__":
+    socketserver.TCPServer.allow_reuse_address = True
+    with socketserver.TCPServer(("", PORT), NoCacheHTTPRequestHandler) as httpd:
+        print(f"Servidor de Desenvolvimento Rodando na porta {PORT} (Sem Cache)...")
+        try:
+            httpd.serve_forever()
+        except KeyboardInterrupt:
+            print("\nServidor finalizado pelo usuário.")

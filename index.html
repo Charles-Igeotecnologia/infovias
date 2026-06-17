@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Geoportal das InfoVias - WebGIS da Região Norte</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+    
+    <!-- Leaflet MarkerCluster CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.Default.css" />
+    
+    <!-- FontAwesome para Ícones Modernos -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    
+    <!-- Estilo Customizado -->
+    <link rel="stylesheet" href="styles.css?v=2.0.0" />
+</head>
+<body>
+
+    <!-- OVERLAY DE CARREGAMENTO (Melhoria 1.2) -->
+    <div id="loading-overlay">
+        <div class="loading-content">
+            <div class="loading-spinner"></div>
+            <div class="loading-title">Geoportal InfoVias</div>
+            <div class="loading-subtitle" id="loading-msg">Carregando InfoVias e Pontos Estratégicos...</div>
+            <div class="loading-bar-track">
+                <div class="loading-bar-fill" id="loading-bar"></div>
+            </div>
+            <div class="loading-credits" style="font-size: 10px; color: var(--text-muted); margin-top: 15px; text-transform: uppercase; letter-spacing: 1px;">
+                Território Digital &amp; IGeoTecnologia
+            </div>
+        </div>
+    </div>
+
+    <!-- Container do Mapa Leaflet -->
+    <div id="map"></div>
+
+    <!-- PAINEL FLUTUANTE (Menu Rápido de Camadas - Superior Esquerdo) -->
+    <div id="floating-menu" class="glass-panel">
+        <h3>Camadas de Análise</h3>
+        <div class="layer-switch">
+            <label for="switch-pontos">
+                <i class="fa-solid fa-location-pin" style="color: var(--priority-medium);"></i>
+                Comunidades (Pontos)
+            </label>
+            <label class="switch">
+                <input type="checkbox" id="switch-pontos" checked>
+                <span class="slider"></span>
+            </label>
+        </div>
+        <div class="layer-switch">
+            <label for="switch-linhas">
+                <i class="fa-solid fa-route" style="color: var(--accent-cyan);"></i>
+                InfoVias (Linhas)
+            </label>
+            <label class="switch">
+                <input type="checkbox" id="switch-linhas" checked>
+                <span class="slider"></span>
+            </label>
+        </div>
+        <div class="layer-switch">
+            <label for="switch-calor">
+                <i class="fa-solid fa-fire" style="color: var(--priority-high);"></i>
+                Mapa de Calor (Densidade)
+            </label>
+            <label class="switch">
+                <input type="checkbox" id="switch-calor">
+                <span class="slider"></span>
+            </label>
+        </div>
+    </div>
+
+    <!-- BARRA DE FERRAMENTAS DE MEDIÇÃO (Topo Centralizado) -->
+    <div id="custom-measure-bar" class="glass-panel">
+        <button id="btn-measure-distance" class="measure-btn" title="Medir Distância Acumulada">
+            <i class="fa-solid fa-ruler"></i> Régua
+        </button>
+        <button id="btn-measure-area" class="measure-btn" title="Medir Área de Polígono">
+            <i class="fa-solid fa-draw-polygon"></i> Área
+        </button>
+        <button id="btn-measure-coords" class="measure-btn" title="Identificar Coordenadas de um Ponto">
+            <i class="fa-solid fa-location-dot"></i> Ponto
+        </button>
+        <div class="measure-divider"></div>
+        <button id="btn-measure-clear" class="measure-btn btn-danger" title="Limpar Medições e Desenhos">
+            <i class="fa-solid fa-trash"></i> Limpar
+        </button>
+    </div>
+
+    <!-- PAINEL DE RESULTADOS DE MEDIÇÃO (Superior Direito) -->
+    <div id="custom-measure-results" class="glass-panel">
+        <div class="title">
+            <i class="fa-solid fa-circle-info" style="color: var(--accent-blue);"></i>
+            <span>Painel de Medição</span>
+        </div>
+        <div id="measure-instructions" class="content">
+            Selecione uma ferramenta na barra superior para iniciar.
+        </div>
+    </div>
+
+    <!-- BOTÃO DE COLAPSO DA SIDEBAR (Melhoria 2.1) -->
+    <button id="sidebar-toggle" class="glass-panel" title="Expandir/Recolher painel lateral">
+        <i class="fa-solid fa-chevron-right" id="sidebar-toggle-icon"></i>
+    </button>
+
+    <!-- BARRA LATERAL (Painel de Análise e Estatísticas - Lado Direito) -->
+    <div id="sidebar" class="glass-panel">
+        <div class="sidebar-header">
+            <h2>Geoportal InfoVias</h2>
+            <p>Análise de Impacto Socioeconômico</p>
+        </div>
+
+        <!-- CAMPO DE BUSCA DE LOCALIDADE (Melhoria 2.2) -->
+        <div class="sidebar-section">
+            <div class="search-box">
+                <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                <input 
+                    type="text" 
+                    id="input-busca-localidade" 
+                    class="search-input" 
+                    placeholder="Buscar localidade ou município..."
+                    autocomplete="off"
+                />
+                <button id="btn-clear-busca" class="search-clear-btn" title="Limpar busca" style="display:none;">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div id="busca-resultados" class="search-results-dropdown" style="display:none;"></div>
+        </div>
+
+        <!-- Seção 1: Filtros de Proximidade -->
+        <div class="sidebar-section">
+            <h3><i class="fa-solid fa-sliders"></i> Análise Espacial</h3>
+
+            <!-- FILTRO POR UF (Melhoria 4.3) -->
+            <div class="control-group">
+                <label for="select-uf">Filtrar por Estado (UF):</label>
+                <select id="select-uf" class="custom-select">
+                    <option value="all">Todos os Estados</option>
+                    <option value="AM">Amazonas (AM)</option>
+                    <option value="PA">Pará (PA)</option>
+                    <option value="AP">Amapá (AP)</option>
+                    <option value="RR">Roraima (RR)</option>
+                </select>
+            </div>
+
+            <!-- FILTRO POR CATEGORIA CENSO (CT_LOCALIDADE) -->
+            <div class="control-group" style="margin-top: 10px;">
+                <label for="select-categoria-ct">Filtrar por Categoria (Censo):</label>
+                <select id="select-categoria-ct" class="custom-select">
+                    <option value="all">Todas as Categorias</option>
+                    <option value="Cidade">Cidade</option>
+                    <option value="Vila">Vila</option>
+                    <option value="Núcleo Urbano">Núcleo Urbano</option>
+                    <option value="Povoado">Povoado</option>
+                    <option value="Localidade Indígena">Localidade Indígena</option>
+                    <option value="Localidade Quilombola">Localidade Quilombola</option>
+                    <option value="Lugarejo">Lugarejo</option>
+                    <option value="Agrovila do PA">Agrovila do PA</option>
+                    <option value="Núcleo Rural">Núcleo Rural</option>
+                    <option value="Outras Localidades">Outras Localidades</option>
+                </select>
+            </div>
+            
+            <div class="control-group">
+                <label for="select-infovia">Selecionar Infovia:</label>
+                <select id="select-infovia" class="custom-select">
+                    <option value="all">Todas as Infovias (Geral)</option>
+                    <!-- Preenchido dinamicamente com JS -->
+                </select>
+            </div>
+
+            <div class="control-group">
+                <label for="slider-distancia">Raio de Proximidade (Buffer):</label>
+                <div class="range-slider-container">
+                    <input type="range" id="slider-distancia" class="range-slider" min="0" max="50" value="0">
+                    <span id="label-distancia" class="range-value">0 km</span>
+                </div>
+            </div>
+            
+            <button id="btn-reset-filters" class="action-btn secondary" style="margin-top: 5px;">
+                <i class="fa-solid fa-arrow-rotate-left"></i> Resetar Filtros
+            </button>
+        </div>
+
+        <!-- Seção 2: Estatísticas Gerais -->
+        <div class="sidebar-section">
+            <h3><i class="fa-solid fa-chart-simple"></i> Comunidades Impactadas</h3>
+            
+            <div class="stats-container">
+                <div class="stat-card accent">
+                    <span class="label">Total Afetadas</span>
+                    <span id="stat-total" class="value">0</span>
+                    <span id="stat-total-pct" class="stat-pct">0% do total</span>
+                </div>
+                <div class="stat-card">
+                    <span class="label">Total Geral</span>
+                    <span id="stat-geral" class="value">11.186</span>
+                </div>
+            </div>
+            
+            <div class="stats-container" style="margin-top: 10px; grid-template-columns: repeat(3, 1fr);">
+                <div class="stat-card" style="border-bottom: 2px solid var(--priority-high);" title="Sedes (Cidades / Áreas Urbanas)">
+                    <span class="label" style="font-size: 9px; color: var(--priority-high);">Sedes</span>
+                    <span id="stat-sedes" class="value" style="font-size: 13px;">0</span>
+                    <span id="stat-sedes-pct" class="stat-pct" style="font-size: 8px;">0%</span>
+                </div>
+                <div class="stat-card" style="border-bottom: 2px solid var(--priority-medium);" title="Vilas (Comunidades Locais)">
+                    <span class="label" style="font-size: 9px; color: var(--priority-medium);">Vilas</span>
+                    <span id="stat-vilas" class="value" style="font-size: 13px;">0</span>
+                    <span id="stat-vilas-pct" class="stat-pct" style="font-size: 8px;">0%</span>
+                </div>
+                <div class="stat-card" style="border-bottom: 2px solid var(--priority-low);" title="Lugares Rurais (Povoados, Lugarejos, Quilombolas, Indígenas, etc.)">
+                    <span class="label" style="font-size: 9px; color: var(--priority-low);">Rurais</span>
+                    <span id="stat-rurais" class="value" style="font-size: 13px;">0</span>
+                    <span id="stat-rurais-pct" class="stat-pct" style="font-size: 8px;">0%</span>
+                </div>
+            </div>
+
+            <!-- GRÁFICO SVG DE COMPOSIÇÃO (Melhoria 4.3) -->
+            <div id="chart-container" class="chart-container" style="display:none;">
+                <div class="chart-title">Distribuição das Comunidades</div>
+                <svg id="composicao-chart" width="100%" height="28" viewBox="0 0 100 28" preserveAspectRatio="none">
+                    <rect id="chart-sedes" x="0" y="6" width="0" height="16" fill="var(--priority-high)" rx="3"/>
+                    <rect id="chart-vilas" x="0" y="6" width="0" height="16" fill="var(--priority-medium)" rx="3"/>
+                    <rect id="chart-rurais" x="0" y="6" width="0" height="16" fill="var(--priority-low)" rx="3"/>
+                </svg>
+                <div class="chart-legend">
+                    <span class="chart-legend-item"><span class="chart-dot" style="background:var(--priority-high)"></span>Sedes</span>
+                    <span class="chart-legend-item"><span class="chart-dot" style="background:var(--priority-medium)"></span>Vilas</span>
+                    <span class="chart-legend-item"><span class="chart-dot" style="background:var(--priority-low)"></span>Rurais</span>
+                </div>
+            </div>
+
+            <!-- DETALHAMENTO DE CATEGORIAS DO CENSO (CT) COLAPSÁVEL -->
+            <div id="ct-breakdown-container" class="ct-breakdown-container" style="display: none;">
+                <button id="btn-toggle-ct-breakdown" class="toggle-ct-btn" title="Expandir/Recolher detalhamento de categorias do censo">
+                    <span><i class="fa-solid fa-list-ul"></i> Detalhe por Categoria (CT)</span>
+                    <i class="fa-solid fa-chevron-down" id="ct-breakdown-chevron"></i>
+                </button>
+                <div id="ct-breakdown-list" class="ct-breakdown-list"></div>
+            </div>
+        </div>
+
+        <!-- Seção 3: Listagem de Localidades Adjacentes -->
+        <div class="sidebar-section" style="flex: 1; display: flex; flex-direction: column;">
+            <h3><i class="fa-solid fa-list-check"></i> Comunidades no Raio</h3>
+            <div id="impact-list" class="impact-results-list">
+                <div class="content" style="color: var(--text-muted); text-align: center; padding: 20px 0; font-size: 12px;">
+                    Aumente o raio de proximidade para listar as comunidades impactadas ao redor das infovias.
+                </div>
+            </div>
+        </div>
+
+        <!-- Seção 4: Ações e Exportação -->
+        <div class="sidebar-section">
+            <div style="display: grid; grid-template-columns: 1fr; gap: 8px;">
+                <button id="btn-generate-report" class="action-btn" disabled>
+                    <i class="fa-solid fa-file-pdf"></i> Gerar Relatório (PDF/HTML)
+                </button>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                    <button id="btn-export-csv" class="action-btn secondary" disabled>
+                        <i class="fa-solid fa-file-csv"></i> CSV
+                    </button>
+                    <button id="btn-share-url" class="action-btn secondary" title="Copiar link com a visão atual do mapa">
+                        <i class="fa-solid fa-share-nodes"></i> Link
+                    </button>
+                </div>
+                <button id="btn-focus-extent" class="action-btn secondary">
+                    <i class="fa-solid fa-maximize"></i> Enquadrar Infovias
+                </button>
+            </div>
+        </div>
+
+        <!-- RODAPÉ DE CRÉDITOS DE DESENVOLVIMENTO -->
+        <div class="sidebar-footer" style="text-align: center; font-size: 10px; color: var(--text-muted); border-top: 1px solid var(--border-glass); padding-top: 12px; margin-top: 4px; line-height: 1.4;">
+            Desenvolvido por <strong>Território Digital</strong><br>
+            em parceria com <strong>IGeoTecnologia</strong>
+        </div>
+    </div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    
+    <!-- Leaflet MarkerCluster JS -->
+    <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>
+    
+    <!-- Leaflet Heat JS (Mapa de Calor) -->
+    <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+    
+    <!-- Turf.js (Operações Espaciais Avançadas) -->
+    <script src="https://unpkg.com/@turf/turf@6.5.0/turf.min.js"></script>
+
+    <!-- Scripts da Aplicação (Organizados por Responsabilidade) -->
+    <script src="app.js?v=2.0.0"></script>
+    <script src="measure.js?v=2.0.0"></script>
+    <script src="analysis.js?v=2.0.0"></script>
+</body>
+</html>
