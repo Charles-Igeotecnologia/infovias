@@ -45,36 +45,41 @@
 
     <!-- PAINEL FLUTUANTE (Menu Rápido de Camadas - Superior Esquerdo) -->
     <div id="floating-menu" class="glass-panel">
-        <h3>Camadas de Análise</h3>
-        <div class="layer-switch">
-            <label for="switch-pontos">
-                <i class="fa-solid fa-location-pin" style="color: var(--priority-medium);"></i>
-                Comunidades (Pontos)
-            </label>
-            <label class="switch">
-                <input type="checkbox" id="switch-pontos" checked>
-                <span class="slider"></span>
-            </label>
+        <div class="floating-menu-header" id="floating-menu-header" style="cursor: pointer; display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+            <h3 style="margin: 0; font-size: 12px; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 6px;"><i class="fa-solid fa-layer-group" style="color: var(--accent-cyan);"></i> Camadas de Análise</h3>
+            <i class="fa-solid fa-chevron-up" id="floating-menu-chevron" style="transition: transform 0.3s ease; color: var(--text-secondary); font-size: 11px;"></i>
         </div>
-        <div class="layer-switch">
-            <label for="switch-linhas">
-                <i class="fa-solid fa-route" style="color: var(--accent-cyan);"></i>
-                InfoVias (Linhas)
-            </label>
-            <label class="switch">
-                <input type="checkbox" id="switch-linhas" checked>
-                <span class="slider"></span>
-            </label>
-        </div>
-        <div class="layer-switch">
-            <label for="switch-calor">
-                <i class="fa-solid fa-fire" style="color: var(--priority-high);"></i>
-                Mapa de Calor (Densidade)
-            </label>
-            <label class="switch">
-                <input type="checkbox" id="switch-calor">
-                <span class="slider"></span>
-            </label>
+        <div class="floating-menu-content" id="floating-menu-content">
+            <div class="layer-switch" style="margin-top: 12px;">
+                <label for="switch-pontos">
+                    <i class="fa-solid fa-location-pin" style="color: var(--priority-medium);"></i>
+                    Comunidades (Pontos)
+                </label>
+                <label class="switch">
+                    <input type="checkbox" id="switch-pontos" checked>
+                    <span class="slider"></span>
+                </label>
+            </div>
+            <div class="layer-switch">
+                <label for="switch-linhas">
+                    <i class="fa-solid fa-route" style="color: var(--accent-cyan);"></i>
+                    InfoVias (Linhas)
+                </label>
+                <label class="switch">
+                    <input type="checkbox" id="switch-linhas" checked>
+                    <span class="slider"></span>
+                </label>
+            </div>
+            <div class="layer-switch">
+                <label for="switch-calor">
+                    <i class="fa-solid fa-fire" style="color: var(--priority-high);"></i>
+                    Mapa de Calor (Densidade)
+                </label>
+                <label class="switch">
+                    <input type="checkbox" id="switch-calor">
+                    <span class="slider"></span>
+                </label>
+            </div>
         </div>
     </div>
 

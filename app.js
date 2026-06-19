@@ -241,6 +241,7 @@ async function carregarBasesGeograficas() {
         configurarPontosEstrategicos(resPontos);
         preencherFiltroInfovias(resLinhas);
         adicionarLegendaAoMapa();
+        inicializarMenusColapsaveis();
 
         // FASE 2: Carregar localidades em segundo plano (~6 MB)
         setProgress(60, "Carregando Comunidades (11.186 localidades)...");
@@ -774,45 +775,145 @@ function adicionarLegendaAoMapa() {
 
     legend.onAdd = function(map) {
         const div = L.DomUtil.create('div', 'info legend glass-panel');
+        div.id = 'legend-panel';
         div.innerHTML = `
-            <h4>Legenda Geoportal</h4>
-            <div class="legend-group">
-                <h5>Categorias de Comunidades (CT)</h5>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px 10px; margin-top: 4px; font-size: 11px;">
-                    <div class="legend-item"><span class="legend-color" style="background: #ff3366; border: 1.2px solid #fff;"></span> Cidade</div>
-                    <div class="legend-item"><span class="legend-color" style="background: #ff9f00; border: 1.2px solid #fff;"></span> Vila</div>
-                    <div class="legend-item"><span class="legend-color" style="background: #ffcc00; border: 1.2px solid #fff;"></span> N. Urbano</div>
-                    <div class="legend-item"><span class="legend-color" style="background: #00f2fe; border: 1.2px solid #fff;"></span> Povoado</div>
-                    <div class="legend-item"><span class="legend-color" style="background: #00e676; border: 1.2px solid #fff;"></span> Indígena</div>
-                    <div class="legend-item"><span class="legend-color" style="background: #b927fc; border: 1.2px solid #fff;"></span> Quilombola</div>
-                    <div class="legend-item"><span class="legend-color" style="background: #ff00ff; border: 1.2px solid #fff;"></span> Lugarejo</div>
-                    <div class="legend-item"><span class="legend-color" style="background: #00d2ff; border: 1.2px solid #fff;"></span> Agrovila</div>
-                    <div class="legend-item"><span class="legend-color" style="background: #a1887f; border: 1.2px solid #fff;"></span> N. Rural</div>
-                    <div class="legend-item"><span class="legend-color" style="background: #a1a1a6; border: 1.2px solid #fff;"></span> Outras</div>
-                </div>
+            <div class="legend-header" id="legend-header" style="cursor: pointer; display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+                <h4 style="margin: 0; font-size: 12px; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 6px;"><i class="fa-solid fa-circle-info" style="color: var(--accent-cyan);"></i> Legenda Geoportal</h4>
+                <i class="fa-solid fa-chevron-up" id="legend-menu-chevron" style="transition: transform 0.3s ease; color: var(--text-secondary); font-size: 11px;"></i>
             </div>
-            <div class="legend-group">
-                <h5>Elementos das InfoVias</h5>
-                <div class="legend-item">
-                    <span style="display:inline-block; width:12px; height:3px; background:#00f2fe; margin-right:4px;"></span>
-                    Infovia Tronco
+            <div class="legend-content" id="legend-content">
+                <div class="legend-group" style="margin-top: 12px;">
+                    <h5>Categorias de Comunidades (CT)</h5>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px 10px; margin-top: 4px; font-size: 11px;">
+                        <div class="legend-item"><span class="legend-color" style="background: #ff3366; border: 1.2px solid #fff;"></span> Cidade</div>
+                        <div class="legend-item"><span class="legend-color" style="background: #ff9f00; border: 1.2px solid #fff;"></span> Vila</div>
+                        <div class="legend-item"><span class="legend-color" style="background: #ffcc00; border: 1.2px solid #fff;"></span> N. Urbano</div>
+                        <div class="legend-item"><span class="legend-color" style="background: #00f2fe; border: 1.2px solid #fff;"></span> Povoado</div>
+                        <div class="legend-item"><span class="legend-color" style="background: #00e676; border: 1.2px solid #fff;"></span> Indígena</div>
+                        <div class="legend-item"><span class="legend-color" style="background: #b927fc; border: 1.2px solid #fff;"></span> Quilombola</div>
+                        <div class="legend-item"><span class="legend-color" style="background: #ff00ff; border: 1.2px solid #fff;"></span> Lugarejo</div>
+                        <div class="legend-item"><span class="legend-color" style="background: #00d2ff; border: 1.2px solid #fff;"></span> Agrovila</div>
+                        <div class="legend-item"><span class="legend-color" style="background: #a1887f; border: 1.2px solid #fff;"></span> N. Rural</div>
+                        <div class="legend-item"><span class="legend-color" style="background: #a1a1a6; border: 1.2px solid #fff;"></span> Outras</div>
+                    </div>
                 </div>
-                <div class="legend-item">
-                    <span style="display:inline-block; width:12px; height:3px; background:#b927fc; margin-right:4px;"></span>
-                    Infovia Derivação
-                </div>
-                <div class="legend-item">
-                    <span style="display:inline-block; width:12px; height:2px; border-top: 2px dashed #ffb703; margin-right:4px;"></span>
-                    Infovia Planejada
-                </div>
-                <div class="legend-item">
-                    <span class="legend-color" style="background: linear-gradient(135deg, #ff007f, #ff5e62); border: 1.5px solid #fff; border-radius: 0; transform: rotate(45deg); width: 8px; height: 8px; margin-left: 2px; margin-right: 6px; box-shadow: 0 0 4px rgba(255, 0, 127, 0.6);"></span>
-                    Nó de Infraestrutura (Ponto da Infovia)
+                <div class="legend-group" style="margin-top: 10px;">
+                    <h5>Elementos das InfoVias</h5>
+                    <div class="legend-item">
+                        <span style="display:inline-block; width:12px; height:3px; background:#00f2fe; margin-right:4px;"></span>
+                        Infovia Tronco
+                    </div>
+                    <div class="legend-item">
+                        <span style="display:inline-block; width:12px; height:3px; background:#b927fc; margin-right:4px;"></span>
+                        Infovia Derivação
+                    </div>
+                    <div class="legend-item">
+                        <span style="display:inline-block; width:12px; height:2px; border-top: 2px dashed #ffb703; margin-right:4px;"></span>
+                        Infovia Planejada
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-color" style="background: linear-gradient(135deg, #ff007f, #ff5e62); border: 1.5px solid #fff; border-radius: 0; transform: rotate(45deg); width: 8px; height: 8px; margin-left: 2px; margin-right: 6px; box-shadow: 0 0 4px rgba(255, 0, 127, 0.6);"></span>
+                        Nó de Infraestrutura (Ponto da Infovia)
+                    </div>
                 </div>
             </div>
         `;
+        
+        // Impedir propagação de eventos no Leaflet
+        L.DomEvent.disableClickPropagation(div);
+        L.DomEvent.disableScrollPropagation(div);
+        
         return div;
     };
 
     legend.addTo(window.map);
+}
+
+// 5.7 Inicializa Menus Colapsáveis com Suporte Móvel (Começam fechados em celular)
+function inicializarMenusColapsaveis() {
+    const isMobile = window.innerWidth <= 768;
+
+    // 1. Menu Flutuante de Camadas
+    const floatMenuHeader = document.getElementById("floating-menu-header");
+    const floatMenu = document.getElementById("floating-menu");
+    const floatContent = document.getElementById("floating-menu-content");
+    const floatChevron = document.getElementById("floating-menu-chevron");
+
+    if (floatMenuHeader && floatMenu && floatContent && floatChevron) {
+        const toggleFloatMenu = (forceCollapse = null) => {
+            const isCurrentlyCollapsed = floatMenu.classList.contains("collapsed");
+            const shouldCollapse = forceCollapse !== null ? forceCollapse : !isCurrentlyCollapsed;
+            
+            if (shouldCollapse) {
+                // Colapsar
+                floatMenu.classList.add("collapsed");
+                floatContent.style.maxHeight = "0px";
+                floatContent.style.opacity = "0";
+                floatChevron.style.transform = "rotate(180deg)";
+            } else {
+                // Expandir
+                floatMenu.classList.remove("collapsed");
+                floatContent.style.maxHeight = floatContent.scrollHeight + "px";
+                floatContent.style.opacity = "1";
+                floatChevron.style.transform = "rotate(0deg)";
+            }
+        };
+
+        floatMenuHeader.addEventListener("click", () => toggleFloatMenu());
+
+        // Configuração inicial
+        if (isMobile) {
+            // No mobile, começa fechado
+            setTimeout(() => toggleFloatMenu(true), 200);
+        } else {
+            // No desktop, começa aberto
+            setTimeout(() => {
+                floatContent.style.maxHeight = floatContent.scrollHeight + "px";
+                floatContent.style.opacity = "1";
+                floatChevron.style.transform = "rotate(0deg)";
+            }, 300);
+        }
+    }
+
+    // 2. Painel de Legenda
+    const legendHeader = document.getElementById("legend-header");
+    const legendPanel = document.getElementById("legend-panel");
+    const legendContent = document.getElementById("legend-content");
+    const legendChevron = document.getElementById("legend-menu-chevron");
+
+    if (legendHeader && legendPanel && legendContent && legendChevron) {
+        const toggleLegend = (forceCollapse = null) => {
+            const isCurrentlyCollapsed = legendPanel.classList.contains("collapsed");
+            const shouldCollapse = forceCollapse !== null ? forceCollapse : !isCurrentlyCollapsed;
+            
+            if (shouldCollapse) {
+                // Colapsar
+                legendPanel.classList.add("collapsed");
+                legendContent.style.maxHeight = "0px";
+                legendContent.style.opacity = "0";
+                legendChevron.style.transform = "rotate(180deg)";
+            } else {
+                // Expandir
+                legendPanel.classList.remove("collapsed");
+                legendContent.style.maxHeight = legendContent.scrollHeight + "px";
+                legendContent.style.opacity = "1";
+                legendChevron.style.transform = "rotate(0deg)";
+            }
+        };
+
+        legendHeader.addEventListener("click", () => toggleLegend());
+
+        // Configuração inicial
+        if (isMobile) {
+            // No mobile, começa fechado
+            setTimeout(() => toggleLegend(true), 200);
+        } else {
+            // No desktop, começa aberto
+            setTimeout(() => {
+                legendContent.style.maxHeight = legendContent.scrollHeight + "px";
+                legendContent.style.opacity = "1";
+                legendChevron.style.transform = "rotate(0deg)";
+            }, 300);
+        }
+    }
 }

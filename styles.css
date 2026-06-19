@@ -1496,3 +1496,18 @@ input:checked + .slider:before {
     margin: 0;
     z-index: 2;
 }
+
+/* =====================================================
+   Estilos para Menus Colapsáveis (Camadas e Legenda)
+   ===================================================== */
+.floating-menu-header, .legend-header {
+    user-select: none;
+    transition: var(--transition-smooth);
+}
+.floating-menu-header:hover h3, .legend-header:hover h4 {
+    color: var(--accent-cyan) !important;
+}
+.floating-menu-content, .legend-content {
+    transition: max-height 0.45s cubic-bezier(0.25, 0.8, 0.25, 1), opacity 0.35s ease;
+    overflow: hidden;
+}
