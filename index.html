@@ -3,300 +3,652 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Geoportal das InfoVias - WebGIS da Região Norte</title>
+    <title>Geoportal Evereste - InfoVias da Região Norte</title>
     
-    <!-- Leaflet CSS -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+    <!-- Google Fonts: Outfit (Títulos) e Inter (Texto de leitura) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     
-    <!-- Leaflet MarkerCluster CSS -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.css" />
-    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.Default.css" />
-    
-    <!-- FontAwesome para Ícones Modernos -->
+    <!-- FontAwesome para ícones -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
-    
-    <!-- Estilo Customizado -->
-    <link rel="stylesheet" href="styles.css?v=2.0.0" />
+
+    <style>
+        :root {
+            --bg-dark: #09090d;
+            --bg-card: rgba(22, 22, 28, 0.45);
+            --border-glass: rgba(255, 255, 255, 0.08);
+            --border-hover: rgba(255, 255, 255, 0.15);
+            --text-primary: #f5f5f7;
+            --text-secondary: #a1a1a6;
+            --text-muted: #6e6e73;
+            
+            /* Gradients e Cores Neon */
+            --accent-cyan: #00f2fe;
+            --accent-blue: #0088ff;
+            --accent-purple: #b927fc;
+            --gradient-primary: linear-gradient(135deg, var(--accent-cyan), var(--accent-blue));
+            --gradient-glow: linear-gradient(135deg, rgba(0, 242, 254, 0.15), rgba(185, 39, 252, 0.15));
+            
+            --blur-intensity: blur(20px) saturate(180%);
+            --transition-smooth: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+        }
+
+        /* Reset e Estilos Gerais */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-dark);
+            color: var(--text-primary);
+            line-height: 1.6;
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        /* Animação Flutuante para a Logo Principal */
+        .logo-evereste-container {
+            text-align: center;
+            margin-bottom: 25px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .logo-evereste-hero {
+            height: 120px;
+            filter: drop-shadow(0 0 20px rgba(0, 136, 255, 0.45));
+            animation: float-logo 5s ease-in-out infinite;
+        }
+
+        @keyframes float-logo {
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+            100% { transform: translateY(0px); }
+        }
+
+        /* Efeito de Brilho no Background */
+        .bg-glow-blob {
+            position: absolute;
+            width: 500px;
+            height: 500px;
+            border-radius: 50%;
+            background: var(--gradient-glow);
+            filter: blur(120px);
+            z-index: -1;
+            pointer-events: none;
+            opacity: 0.7;
+        }
+
+        .blob-top-right {
+            top: -150px;
+            right: -100px;
+            background: radial-gradient(circle, rgba(185, 39, 252, 0.2) 0%, rgba(0, 0, 0, 0) 70%);
+        }
+
+        .blob-bottom-left {
+            bottom: -200px;
+            left: -150px;
+            background: radial-gradient(circle, rgba(0, 242, 254, 0.18) 0%, rgba(0, 0, 0, 0) 70%);
+        }
+
+        /* Layout Container */
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 30px;
+            position: relative;
+            z-index: 10;
+        }
+
+        /* Barra de Navegação */
+        header {
+            padding: 24px 0;
+            border-bottom: 1px solid var(--border-glass);
+            margin-bottom: 60px;
+        }
+
+        .nav-wrapper {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            font-family: 'Outfit', sans-serif;
+            font-size: 22px;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: var(--gradient-primary);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .logo i {
+            background: var(--gradient-primary);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .brand-badges {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .brand-badge {
+            background: var(--bg-card);
+            border: 1px solid var(--border-glass);
+            border-radius: 8px;
+            padding: 6px 12px;
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .brand-badge i {
+            color: var(--accent-cyan);
+        }
+
+        /* Hero Section */
+        .hero {
+            text-align: center;
+            max-width: 850px;
+            margin: 0 auto 80px auto;
+            padding-top: 20px;
+        }
+
+        .hero h1 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 54px;
+            font-weight: 800;
+            line-height: 1.15;
+            letter-spacing: -1.5px;
+            margin-bottom: 24px;
+            color: #ffffff;
+            background: linear-gradient(135deg, #ffffff 40%, var(--text-secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .hero p {
+            font-size: 18px;
+            color: var(--text-secondary);
+            margin-bottom: 40px;
+            line-height: 1.5;
+            font-weight: 400;
+        }
+
+        /* Botão Principal CTA */
+        .cta-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+            padding: 16px 36px;
+            font-family: 'Outfit', sans-serif;
+            font-size: 16px;
+            font-weight: 700;
+            text-decoration: none;
+            color: #ffffff;
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-cyan));
+            border-radius: 30px;
+            box-shadow: 0 4px 20px rgba(0, 136, 255, 0.4);
+            transition: var(--transition-smooth);
+            position: relative;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .cta-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.25), transparent);
+            transition: 0.5s;
+        }
+
+        .cta-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 30px rgba(0, 136, 255, 0.6), 0 0 15px rgba(0, 242, 254, 0.3);
+        }
+
+        .cta-btn:hover::before {
+            left: 100%;
+        }
+
+        .cta-btn i {
+            transition: transform 0.3s ease;
+        }
+
+        .cta-btn:hover i {
+            transform: translateX(4px);
+        }
+
+        /* Grid de Funcionalidades */
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 24px;
+            margin-bottom: 100px;
+        }
+
+        .feature-card {
+            background: var(--bg-card);
+            backdrop-filter: var(--blur-intensity);
+            -webkit-backdrop-filter: var(--blur-intensity);
+            border: 1px solid var(--border-glass);
+            border-radius: 16px;
+            padding: 30px;
+            transition: var(--transition-smooth);
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .feature-card:hover {
+            border-color: var(--border-hover);
+            transform: translateY(-5px);
+            background: rgba(255, 255, 255, 0.03);
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.3);
+        }
+
+        .feature-icon-wrapper {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            background: rgba(0, 242, 254, 0.08);
+            border: 1px solid rgba(0, 242, 254, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--accent-cyan);
+            font-size: 20px;
+            transition: var(--transition-smooth);
+        }
+
+        .feature-card:hover .feature-icon-wrapper {
+            background: var(--gradient-primary);
+            color: #ffffff;
+            border-color: transparent;
+            box-shadow: 0 0 12px rgba(0, 242, 254, 0.4);
+        }
+
+        .feature-card h3 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 18px;
+            font-weight: 700;
+            color: #ffffff;
+        }
+
+        .feature-card p {
+            font-size: 13px;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+
+        /* Seção "O Projeto" */
+        .project-section {
+            background: var(--bg-card);
+            backdrop-filter: var(--blur-intensity);
+            -webkit-backdrop-filter: var(--blur-intensity);
+            border: 1px solid var(--border-glass);
+            border-radius: 20px;
+            padding: 50px;
+            margin-bottom: 80px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 50px;
+            align-items: center;
+        }
+
+        .project-info h2 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 32px;
+            font-weight: 800;
+            margin-bottom: 20px;
+            letter-spacing: -0.8px;
+            color: #ffffff;
+            background: linear-gradient(135deg, #ffffff, var(--text-secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .project-info p {
+            font-size: 14px;
+            color: var(--text-secondary);
+            line-height: 1.6;
+            margin-bottom: 16px;
+        }
+
+        .project-info p:last-child {
+            margin-bottom: 0;
+        }
+
+        .project-visual {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .visual-box {
+            width: 100%;
+            aspect-ratio: 1.5;
+            background: radial-gradient(circle, rgba(0, 136, 255, 0.1) 0%, rgba(185, 39, 252, 0.05) 100%);
+            border: 1px solid var(--border-glass);
+            border-radius: 12px;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-muted);
+            font-size: 14px;
+            overflow: hidden;
+        }
+
+        .visual-box::after {
+            content: '';
+            position: absolute;
+            width: 180%;
+            height: 1.5px;
+            background: linear-gradient(90deg, transparent, var(--accent-cyan), transparent);
+            transform: rotate(-15deg);
+            animation: scanning 4s infinite linear;
+        }
+
+        @keyframes scanning {
+            0% { top: -20%; }
+            100% { top: 120%; }
+        }
+
+        .visual-content {
+            text-align: center;
+            z-index: 5;
+        }
+
+        .visual-content i {
+            font-size: 52px;
+            color: var(--accent-cyan);
+            margin-bottom: 16px;
+            text-shadow: 0 0 15px rgba(0, 242, 254, 0.4);
+        }
+
+        .visual-content div {
+            font-family: 'Outfit', sans-serif;
+            font-weight: 700;
+            color: var(--text-primary);
+            font-size: 16px;
+        }
+
+        /* Seção de Parcerias */
+        .partners-section {
+            text-align: center;
+            margin-bottom: 100px;
+        }
+
+        .partners-section h2 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 26px;
+            font-weight: 800;
+            margin-bottom: 40px;
+            letter-spacing: -0.5px;
+            color: #ffffff;
+        }
+
+        .partners-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .partner-card {
+            background: var(--bg-card);
+            backdrop-filter: var(--blur-intensity);
+            border: 1px solid var(--border-glass);
+            border-radius: 16px;
+            padding: 30px;
+            text-align: left;
+            transition: var(--transition-smooth);
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        .partner-card:hover {
+            border-color: rgba(255, 255, 255, 0.15);
+            background: rgba(255, 255, 255, 0.02);
+            transform: translateY(-3px);
+        }
+
+        .partner-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            border-bottom: 1px solid var(--border-glass);
+            padding-bottom: 12px;
+        }
+
+        .partner-logo-box {
+            width: 40px;
+            height: 40px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            color: var(--accent-cyan);
+        }
+
+        .partner-title {
+            font-family: 'Outfit', sans-serif;
+            font-size: 18px;
+            font-weight: 700;
+            color: #ffffff;
+        }
+
+        .partner-desc {
+            font-size: 13px;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+
+        .partner-role {
+            font-size: 11px;
+            color: var(--accent-blue);
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-top: auto;
+        }
+
+        /* Rodapé */
+        footer {
+            padding: 40px 0;
+            border-top: 1px solid var(--border-glass);
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 12px;
+        }
+
+        footer p {
+            margin-bottom: 10px;
+        }
+
+        /* Responsividade */
+        @media (max-width: 900px) {
+            .hero h1 { font-size: 40px; }
+            .project-section {
+                grid-template-columns: 1fr;
+                gap: 30px;
+                padding: 30px;
+            }
+            .partners-grid {
+                grid-template-columns: 1fr;
+                gap: 20px;
+            }
+        }
+    </style>
 </head>
 <body>
 
-    <!-- OVERLAY DE CARREGAMENTO (Melhoria 1.2) -->
-    <div id="loading-overlay">
-        <div class="loading-content">
-            <div class="loading-spinner"></div>
-            <div class="loading-title">Geoportal InfoVias</div>
-            <div class="loading-subtitle" id="loading-msg">Carregando InfoVias e Pontos Estratégicos...</div>
-            <div class="loading-bar-track">
-                <div class="loading-bar-fill" id="loading-bar"></div>
+    <!-- Blobs de Brilho no Fundo -->
+    <div class="bg-glow-blob blob-top-right"></div>
+    <div class="bg-glow-blob blob-bottom-left"></div>
+
+    <!-- CABEÇALHO -->
+    <header>
+        <div class="container">
+            <div class="nav-wrapper">
+                <div class="logo">
+                    <img src="logo_evereste.png" alt="Evereste" style="height: 32px; filter: drop-shadow(0 0 5px rgba(0, 242, 254, 0.4));">
+                    <span>Geoportal Evereste</span>
+                </div>
+                <div class="brand-badges">
+                    <div class="brand-badge">
+                        <i class="fa-solid fa-globe"></i> WebGIS Norte
+                    </div>
+                </div>
             </div>
-            <div class="loading-credits" style="font-size: 10px; color: var(--text-muted); margin-top: 15px; text-transform: uppercase; letter-spacing: 1px;">
-                Território Digital &amp; IGeoTecnologia
+        </div>
+    </header>
+
+    <!-- CONTEÚDO PRINCIPAL -->
+    <main class="container">
+        
+        <!-- HERO SECTION -->
+        <section class="hero">
+            <div class="logo-evereste-container">
+                <img src="logo_evereste.png" alt="Logo Evereste" class="logo-evereste-hero">
             </div>
-        </div>
-    </div>
+            <h1>Geoportal das InfoVias da Região Norte</h1>
+            <p>
+                Plataforma espacial avançada para visualização, simulação de zonas de influência e avaliação de impacto socioeconômico das autoestradas de conectividade na Amazônia.
+            </p>
+            <a href="mapa.html" class="cta-btn">
+                <span>Acessar WebGIS Interativo</span>
+                <i class="fa-solid fa-arrow-right"></i>
+            </a>
+        </section>
 
-    <!-- Container do Mapa Leaflet -->
-    <div id="map"></div>
-
-    <!-- PAINEL FLUTUANTE (Menu Rápido de Camadas - Superior Esquerdo) -->
-    <div id="floating-menu" class="glass-panel">
-        <h3>Camadas de Análise</h3>
-        <div class="layer-switch">
-            <label for="switch-pontos">
-                <i class="fa-solid fa-location-pin" style="color: var(--priority-medium);"></i>
-                Comunidades (Pontos)
-            </label>
-            <label class="switch">
-                <input type="checkbox" id="switch-pontos" checked>
-                <span class="slider"></span>
-            </label>
-        </div>
-        <div class="layer-switch">
-            <label for="switch-linhas">
-                <i class="fa-solid fa-route" style="color: var(--accent-cyan);"></i>
-                InfoVias (Linhas)
-            </label>
-            <label class="switch">
-                <input type="checkbox" id="switch-linhas" checked>
-                <span class="slider"></span>
-            </label>
-        </div>
-        <div class="layer-switch">
-            <label for="switch-calor">
-                <i class="fa-solid fa-fire" style="color: var(--priority-high);"></i>
-                Mapa de Calor (Densidade)
-            </label>
-            <label class="switch">
-                <input type="checkbox" id="switch-calor">
-                <span class="slider"></span>
-            </label>
-        </div>
-    </div>
-
-    <!-- BARRA DE FERRAMENTAS DE MEDIÇÃO (Topo Centralizado) -->
-    <div id="custom-measure-bar" class="glass-panel">
-        <button id="btn-measure-distance" class="measure-btn" title="Medir Distância Acumulada">
-            <i class="fa-solid fa-ruler"></i> Régua
-        </button>
-        <button id="btn-measure-area" class="measure-btn" title="Medir Área de Polígono">
-            <i class="fa-solid fa-draw-polygon"></i> Área
-        </button>
-        <button id="btn-measure-coords" class="measure-btn" title="Identificar Coordenadas de um Ponto">
-            <i class="fa-solid fa-location-dot"></i> Ponto
-        </button>
-        <div class="measure-divider"></div>
-        <button id="btn-measure-clear" class="measure-btn btn-danger" title="Limpar Medições e Desenhos">
-            <i class="fa-solid fa-trash"></i> Limpar
-        </button>
-    </div>
-
-    <!-- PAINEL DE RESULTADOS DE MEDIÇÃO (Superior Direito) -->
-    <div id="custom-measure-results" class="glass-panel">
-        <div class="title">
-            <i class="fa-solid fa-circle-info" style="color: var(--accent-blue);"></i>
-            <span>Painel de Medição</span>
-        </div>
-        <div id="measure-instructions" class="content">
-            Selecione uma ferramenta na barra superior para iniciar.
-        </div>
-    </div>
-
-    <!-- BOTÃO DE COLAPSO DA SIDEBAR (Melhoria 2.1) -->
-    <button id="sidebar-toggle" class="glass-panel" title="Expandir/Recolher painel lateral">
-        <i class="fa-solid fa-chevron-right" id="sidebar-toggle-icon"></i>
-    </button>
-
-    <!-- BARRA LATERAL (Painel de Análise e Estatísticas - Lado Direito) -->
-    <div id="sidebar" class="glass-panel">
-        <div class="sidebar-header">
-            <h2>Geoportal InfoVias</h2>
-            <p>Análise de Impacto Socioeconômico</p>
-        </div>
-
-        <!-- CAMPO DE BUSCA DE LOCALIDADE (Melhoria 2.2) -->
-        <div class="sidebar-section">
-            <div class="search-box">
-                <i class="fa-solid fa-magnifying-glass search-icon"></i>
-                <input 
-                    type="text" 
-                    id="input-busca-localidade" 
-                    class="search-input" 
-                    placeholder="Buscar localidade ou município..."
-                    autocomplete="off"
-                />
-                <button id="btn-clear-busca" class="search-clear-btn" title="Limpar busca" style="display:none;">
-                    <i class="fa-solid fa-xmark"></i>
-                </button>
-            </div>
-            <div id="busca-resultados" class="search-results-dropdown" style="display:none;"></div>
-        </div>
-
-        <!-- Seção 1: Filtros de Proximidade -->
-        <div class="sidebar-section">
-            <h3><i class="fa-solid fa-sliders"></i> Análise Espacial</h3>
-
-            <!-- FILTRO POR UF (Melhoria 4.3) -->
-            <div class="control-group">
-                <label for="select-uf">Filtrar por Estado (UF):</label>
-                <select id="select-uf" class="custom-select">
-                    <option value="all">Todos os Estados</option>
-                    <option value="AM">Amazonas (AM)</option>
-                    <option value="PA">Pará (PA)</option>
-                    <option value="AP">Amapá (AP)</option>
-                    <option value="RR">Roraima (RR)</option>
-                </select>
-            </div>
-
-            <!-- FILTRO POR CATEGORIA CENSO (CT_LOCALIDADE) -->
-            <div class="control-group" style="margin-top: 10px;">
-                <label for="select-categoria-ct">Filtrar por Categoria (Censo):</label>
-                <select id="select-categoria-ct" class="custom-select">
-                    <option value="all">Todas as Categorias</option>
-                    <option value="Cidade">Cidade</option>
-                    <option value="Vila">Vila</option>
-                    <option value="Núcleo Urbano">Núcleo Urbano</option>
-                    <option value="Povoado">Povoado</option>
-                    <option value="Localidade Indígena">Localidade Indígena</option>
-                    <option value="Localidade Quilombola">Localidade Quilombola</option>
-                    <option value="Lugarejo">Lugarejo</option>
-                    <option value="Agrovila do PA">Agrovila do PA</option>
-                    <option value="Núcleo Rural">Núcleo Rural</option>
-                    <option value="Outras Localidades">Outras Localidades</option>
-                </select>
+        <!-- CARDS DE FUNCIONALIDADES -->
+        <section class="features-grid">
+            <div class="feature-card">
+                <div class="feature-icon-wrapper">
+                    <i class="fa-solid fa-circle-dot"></i>
+                </div>
+                <h3>Análise de Buffer</h3>
+                <p>Simule a zona de influência espacial das infovias em raios de 0 a 50 km com processamento em tempo real via Turf.js.</p>
             </div>
             
-            <div class="control-group">
-                <label for="select-infovia">Selecionar Infovia:</label>
-                <select id="select-infovia" class="custom-select">
-                    <option value="all">Todas as Infovias (Geral)</option>
-                    <!-- Preenchido dinamicamente com JS -->
-                </select>
-            </div>
-
-            <div class="control-group">
-                <label for="slider-distancia">Raio de Proximidade (Buffer):</label>
-                <div class="range-slider-container">
-                    <input type="range" id="slider-distancia" class="range-slider" min="0" max="50" value="0">
-                    <span id="label-distancia" class="range-value">0 km</span>
+            <div class="feature-card">
+                <div class="feature-icon-wrapper">
+                    <i class="fa-solid fa-users"></i>
                 </div>
+                <h3>Dados Demográficos</h3>
+                <p>Acesse o mapeamento de 11.186 comunidades e visualize a distribuição estatística por categorias e estados (AM, PA, AP, RR).</p>
             </div>
             
-            <button id="btn-reset-filters" class="action-btn secondary" style="margin-top: 5px;">
-                <i class="fa-solid fa-arrow-rotate-left"></i> Resetar Filtros
-            </button>
-        </div>
-
-        <!-- Seção 2: Estatísticas Gerais -->
-        <div class="sidebar-section">
-            <h3><i class="fa-solid fa-chart-simple"></i> Comunidades Impactadas</h3>
-            
-            <div class="stats-container">
-                <div class="stat-card accent">
-                    <span class="label">Total Afetadas</span>
-                    <span id="stat-total" class="value">0</span>
-                    <span id="stat-total-pct" class="stat-pct">0% do total</span>
+            <div class="feature-card">
+                <div class="feature-icon-wrapper">
+                    <i class="fa-solid fa-file-invoice"></i>
                 </div>
-                <div class="stat-card">
-                    <span class="label">Total Geral</span>
-                    <span id="stat-geral" class="value">11.186</span>
-                </div>
+                <h3>Relatórios Dinâmicos</h3>
+                <p>Gere na memória relatórios analíticos completos em HTML prontos para impressão ou salvamento em PDF, além de exportação direta em CSV.</p>
             </div>
             
-            <div class="stats-container" style="margin-top: 10px; grid-template-columns: repeat(3, 1fr);">
-                <div class="stat-card" style="border-bottom: 2px solid var(--priority-high);" title="Sedes (Cidades / Áreas Urbanas)">
-                    <span class="label" style="font-size: 9px; color: var(--priority-high);">Sedes</span>
-                    <span id="stat-sedes" class="value" style="font-size: 13px;">0</span>
-                    <span id="stat-sedes-pct" class="stat-pct" style="font-size: 8px;">0%</span>
+            <div class="feature-card">
+                <div class="feature-icon-wrapper">
+                    <i class="fa-solid fa-bezier-curve"></i>
                 </div>
-                <div class="stat-card" style="border-bottom: 2px solid var(--priority-medium);" title="Vilas (Comunidades Locais)">
-                    <span class="label" style="font-size: 9px; color: var(--priority-medium);">Vilas</span>
-                    <span id="stat-vilas" class="value" style="font-size: 13px;">0</span>
-                    <span id="stat-vilas-pct" class="stat-pct" style="font-size: 8px;">0%</span>
-                </div>
-                <div class="stat-card" style="border-bottom: 2px solid var(--priority-low);" title="Lugares Rurais (Povoados, Lugarejos, Quilombolas, Indígenas, etc.)">
-                    <span class="label" style="font-size: 9px; color: var(--priority-low);">Rurais</span>
-                    <span id="stat-rurais" class="value" style="font-size: 13px;">0</span>
-                    <span id="stat-rurais-pct" class="stat-pct" style="font-size: 8px;">0%</span>
-                </div>
+                <h3>Infraestrutura de Rede</h3>
+                <p>Identifique traçados ópticos classificados por tipo (Troncos, Derivações, Planejadas) e nós de conexões estratégicos pulsantes.</p>
             </div>
+        </section>
 
-            <!-- GRÁFICO SVG DE COMPOSIÇÃO (Melhoria 4.3) -->
-            <div id="chart-container" class="chart-container" style="display:none;">
-                <div class="chart-title">Distribuição das Comunidades</div>
-                <svg id="composicao-chart" width="100%" height="28" viewBox="0 0 100 28" preserveAspectRatio="none">
-                    <rect id="chart-sedes" x="0" y="6" width="0" height="16" fill="var(--priority-high)" rx="3"/>
-                    <rect id="chart-vilas" x="0" y="6" width="0" height="16" fill="var(--priority-medium)" rx="3"/>
-                    <rect id="chart-rurais" x="0" y="6" width="0" height="16" fill="var(--priority-low)" rx="3"/>
-                </svg>
-                <div class="chart-legend">
-                    <span class="chart-legend-item"><span class="chart-dot" style="background:var(--priority-high)"></span>Sedes</span>
-                    <span class="chart-legend-item"><span class="chart-dot" style="background:var(--priority-medium)"></span>Vilas</span>
-                    <span class="chart-legend-item"><span class="chart-dot" style="background:var(--priority-low)"></span>Rurais</span>
+        <!-- SEÇÃO SOBRE O PROJETO -->
+        <section class="project-section">
+            <div class="project-info">
+                <h2>Inteligência Geográfica na Amazônia</h2>
+                <p>
+                    O **Geoportal das InfoVias** é uma ferramenta estratégica de WebGIS concebida para mapear e medir a eficiência da implantação da infraestrutura de fibra óptica fluvial e terrestre nos estados da Região Norte brasileira.
+                </p>
+                <p>
+                    Ao cruzar a posição geográfica dos traçados de cabos ópticos com os registros do IBGE, o sistema calcula de forma instantânea o alcance territorial do sinal digital. Isso fornece aos planejadores e pesquisadores dados precisos sobre o atendimento e impacto digital em comunidades urbanas, povoados isolados, aldeias indígenas e territórios quilombolas.
+                </p>
+            </div>
+            <div class="project-visual">
+                <div class="visual-box">
+                    <div class="visual-content">
+                        <i class="fa-solid fa-satellite-dish"></i>
+                        <div>Processamento Geoespacial Ativo</div>
+                    </div>
                 </div>
             </div>
+        </section>
 
-            <!-- DETALHAMENTO DE CATEGORIAS DO CENSO (CT) COLAPSÁVEL -->
-            <div id="ct-breakdown-container" class="ct-breakdown-container" style="display: none;">
-                <button id="btn-toggle-ct-breakdown" class="toggle-ct-btn" title="Expandir/Recolher detalhamento de categorias do censo">
-                    <span><i class="fa-solid fa-list-ul"></i> Detalhe por Categoria (CT)</span>
-                    <i class="fa-solid fa-chevron-down" id="ct-breakdown-chevron"></i>
-                </button>
-                <div id="ct-breakdown-list" class="ct-breakdown-list"></div>
+        <!-- SEÇÃO PARCERIAS / DESENVOLVEDORES -->
+        <section class="partners-section">
+            <h2>Autoria e Desenvolvimento</h2>
+            <div class="partners-grid">
+                <!-- PARCEIRO 1 -->
+                <div class="partner-card">
+                    <div class="partner-header">
+                        <div class="partner-logo-box">
+                            <i class="fa-solid fa-terminal"></i>
+                        </div>
+                        <div class="partner-title">Território Digital</div>
+                    </div>
+                    <p class="partner-desc">
+                        Especialista no desenvolvimento de software de alta fidelidade, arquitetura de sistemas e design de interfaces premium com foco em experiência do usuário (UX/UI).
+                    </p>
+                    <div class="partner-role">Engenharia de Software e Design</div>
+                </div>
+
+                <!-- PARCEIRO 2 -->
+                <div class="partner-card">
+                    <div class="partner-header">
+                        <div class="partner-logo-box">
+                            <i class="fa-solid fa-layer-group"></i>
+                        </div>
+                        <div class="partner-title">IGeoTecnologia</div>
+                    </div>
+                    <p class="partner-desc">
+                        Líder em soluções em geotecnologias, banco de dados espaciais, cartografia temática e processamento analítico de dados geográficos e ambientais.
+                    </p>
+                    <div class="partner-role">Geoprocessamento e Engenharia GIS</div>
+                </div>
             </div>
+        </section>
+
+    </main>
+
+    <!-- RODAPÉ -->
+    <footer>
+        <div class="container">
+            <p>Geoportal das InfoVias da Região Norte &copy; 2026</p>
+            <p style="font-size: 10px; color: var(--text-muted);">
+                Desenvolvido colaborativamente pela equipe da Território Digital em parceria com a IGeoTecnologia.
+            </p>
         </div>
+    </footer>
 
-        <!-- Seção 3: Listagem de Localidades Adjacentes -->
-        <div class="sidebar-section" style="flex: 1; display: flex; flex-direction: column;">
-            <h3><i class="fa-solid fa-list-check"></i> Comunidades no Raio</h3>
-            <div id="impact-list" class="impact-results-list">
-                <div class="content" style="color: var(--text-muted); text-align: center; padding: 20px 0; font-size: 12px;">
-                    Aumente o raio de proximidade para listar as comunidades impactadas ao redor das infovias.
-                </div>
-            </div>
-        </div>
-
-        <!-- Seção 4: Ações e Exportação -->
-        <div class="sidebar-section">
-            <div style="display: grid; grid-template-columns: 1fr; gap: 8px;">
-                <button id="btn-generate-report" class="action-btn" disabled>
-                    <i class="fa-solid fa-file-pdf"></i> Gerar Relatório (PDF/HTML)
-                </button>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-                    <button id="btn-export-csv" class="action-btn secondary" disabled>
-                        <i class="fa-solid fa-file-csv"></i> CSV
-                    </button>
-                    <button id="btn-share-url" class="action-btn secondary" title="Copiar link com a visão atual do mapa">
-                        <i class="fa-solid fa-share-nodes"></i> Link
-                    </button>
-                </div>
-                <button id="btn-focus-extent" class="action-btn secondary">
-                    <i class="fa-solid fa-maximize"></i> Enquadrar Infovias
-                </button>
-            </div>
-        </div>
-
-        <!-- RODAPÉ DE CRÉDITOS DE DESENVOLVIMENTO -->
-        <div class="sidebar-footer" style="text-align: center; font-size: 10px; color: var(--text-muted); border-top: 1px solid var(--border-glass); padding-top: 12px; margin-top: 4px; line-height: 1.4;">
-            Desenvolvido por <strong>Território Digital</strong><br>
-            em parceria com <strong>IGeoTecnologia</strong>
-        </div>
-    </div>
-
-    <!-- Leaflet JS -->
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-    
-    <!-- Leaflet MarkerCluster JS -->
-    <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>
-    
-    <!-- Leaflet Heat JS (Mapa de Calor) -->
-    <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
-    
-    <!-- Turf.js (Operações Espaciais Avançadas) -->
-    <script src="https://unpkg.com/@turf/turf@6.5.0/turf.min.js"></script>
-
-    <!-- Scripts da Aplicação (Organizados por Responsabilidade) -->
-    <script src="app.js?v=2.0.0"></script>
-    <script src="measure.js?v=2.0.0"></script>
-    <script src="analysis.js?v=2.0.0"></script>
 </body>
 </html>

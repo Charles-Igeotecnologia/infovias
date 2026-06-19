@@ -838,9 +838,9 @@
 
     <!-- BARRA FLUTUANTE (Não imprimível) -->
     <div class="no-print-bar">
-        <div class="brand">
-            <i class="fa-solid fa-file-pdf"></i>
-            <span>Relatório Analítico Geoportal</span>
+        <div class="brand" style="display: flex; align-items: center; gap: 8px;">
+            <img src="logo_evereste.png" alt="Evereste" style="height: 24px; filter: drop-shadow(0 0 4px rgba(0, 242, 254, 0.4));">
+            <span>Relatório Geoportal Evereste</span>
         </div>
         <div class="action-buttons">
             <button class="btn btn-primary" onclick="window.print()">
@@ -856,10 +856,13 @@
         
         <!-- CABEÇALHO DO RELATÓRIO -->
         <div class="report-header">
-            <div class="report-title-section">
-                <div>
-                    <h1>Relatório de Impacto Socioeconômico</h1>
-                    <div class="report-meta">Geoportal das InfoVias da Região Norte &bull; Gerado em: ${dataEmissao}</div>
+            <div class="report-title-section" style="display: flex; justify-content: space-between; align-items: center;">
+                <div style="display: flex; align-items: center; gap: 15px;">
+                    <img src="logo_evereste.png" alt="Evereste" style="height: 48px;">
+                    <div>
+                        <h1 style="font-size: 18px; font-weight: 700; color: var(--primary); margin-bottom: 2px;">Relatório de Impacto Socioeconômico</h1>
+                        <div class="report-meta">Geoportal das InfoVias da Região Norte &bull; Gerado em: ${dataEmissao}</div>
+                    </div>
                 </div>
                 <div style="text-align: right; font-size: 11px; color: #64748b; line-height: 1.4;">
                     <strong>Território Digital &amp; IGeoTecnologia</strong><br>

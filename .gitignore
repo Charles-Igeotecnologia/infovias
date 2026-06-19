@@ -6,3 +6,8 @@ __pycache__/
 Thumbs.db
 Desktop.ini
 .DS_Store
+
+# Data files
+*.gpkg
+*.geojson
+
