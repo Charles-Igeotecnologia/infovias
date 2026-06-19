@@ -178,11 +178,12 @@
         // 3. Adicionar o polígono de buffer ao mapa com estilização suave e moderna (Glassmorphism cian)
         L.geoJSON(bufferGeoJSON, {
             style: {
-                color: '#00f2fe',
-                weight: 1.5,
-                fillColor: '#00f2fe',
-                fillOpacity: 0.12,
-                opacity: 0.5
+                color: '#ff8800',
+                weight: 2,
+                dashArray: '6, 4',
+                fillColor: '#ff8800',
+                fillOpacity: 0.15,
+                opacity: 0.85
             }
         }).addTo(activeBufferLayer);
 
