@@ -1429,48 +1429,41 @@ input:checked + .slider:before {
     backdrop-filter: var(--blur-intensity);
     -webkit-backdrop-filter: var(--blur-intensity);
     border: 1px solid var(--border-glass);
-    border-radius: 16px;
-    padding: 30px;
+    border-radius: 12px;
+    padding: 18px 24px;
     position: relative;
     overflow: hidden;
     transition: var(--transition-smooth);
-    text-align: left;
     display: flex;
-    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
     gap: 16px;
 }
 
 .state-card-premium:hover {
     border-color: var(--border-hover);
-    transform: translateY(-5px);
+    transform: translateY(-3px);
     background: rgba(255, 255, 255, 0.03);
-    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
 }
 
 .state-glow {
     position: absolute;
-    top: -50px;
-    right: -50px;
-    width: 150px;
-    height: 150px;
+    top: -30px;
+    right: -30px;
+    width: 100px;
+    height: 100px;
     border-radius: 50%;
-    filter: blur(40px);
+    filter: blur(25px);
     pointer-events: none;
     z-index: 1;
-    opacity: 0.6;
+    opacity: 0.5;
     transition: var(--transition-smooth);
 }
 
 .state-card-premium:hover .state-glow {
-    opacity: 1;
-    transform: scale(1.2);
-}
-
-.state-header {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    z-index: 2;
+    opacity: 0.9;
+    transform: scale(1.3);
 }
 
 .state-badge {
@@ -1478,10 +1471,11 @@ input:checked + .slider:before {
     color: #ffffff;
     font-family: 'Outfit', sans-serif;
     font-weight: 800;
-    font-size: 14px;
-    padding: 4px 10px;
-    border-radius: 6px;
+    font-size: 13px;
+    padding: 6px 12px;
+    border-radius: 8px;
     box-shadow: 0 0 10px rgba(0, 242, 254, 0.3);
+    z-index: 2;
 }
 
 .state-card-premium:nth-child(2) .state-badge {
@@ -1494,38 +1488,11 @@ input:checked + .slider:before {
     background: linear-gradient(135deg, #ff007f, var(--accent-purple));
 }
 
-.state-header h3 {
+.state-card-premium h3 {
     font-family: 'Outfit', sans-serif;
-    font-size: 20px;
+    font-size: 18px;
     font-weight: 700;
     color: #ffffff;
-}
-
-.state-desc {
-    font-size: 13px;
-    color: var(--text-secondary);
-    line-height: 1.6;
+    margin: 0;
     z-index: 2;
-    flex-grow: 1;
-}
-
-.state-meta {
-    display: flex;
-    gap: 12px;
-    font-size: 11px;
-    color: var(--text-muted);
-    border-top: 1px solid var(--border-glass);
-    padding-top: 12px;
-    margin-top: auto;
-    z-index: 2;
-}
-
-.state-meta span {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-}
-
-.state-meta i {
-    color: var(--accent-cyan);
 }
