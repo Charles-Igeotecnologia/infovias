@@ -195,7 +195,10 @@
                 <label for="slider-distancia">Raio de Proximidade (Buffer):</label>
                 <div class="range-slider-container">
                     <input type="range" id="slider-distancia" class="range-slider" min="0" max="50" value="0">
-                    <span id="label-distancia" class="range-value">0 km</span>
+                    <div class="input-distancia-wrapper">
+                        <input type="number" id="input-distancia" class="input-distancia-num" min="0" max="50" value="0" step="1">
+                        <span class="input-distancia-unit">km</span>
+                    </div>
                 </div>
             </div>
             

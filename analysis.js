@@ -10,7 +10,7 @@
     const selectUF          = document.getElementById("select-uf");          // MELHORIA 4.2
     const selectCategoriaCt = document.getElementById("select-categoria-ct"); // Filtro de Categoria Censo
     const sliderDistancia   = document.getElementById("slider-distancia");
-    const labelDistancia    = document.getElementById("label-distancia");
+    const inputDistancia    = document.getElementById("input-distancia");
     const btnReset          = document.getElementById("btn-reset-filters");
     
     const statTotal     = document.getElementById("stat-total");
@@ -47,6 +47,10 @@
         if (sliderDistancia) {
             sliderDistancia.addEventListener("input",  onSliderInput);
             sliderDistancia.addEventListener("change", onSliderChange);
+        }
+        if (inputDistancia) {
+            inputDistancia.addEventListener("input",  onInputDistanciaInput);
+            inputDistancia.addEventListener("change", onInputDistanciaChange);
         }
         if (selectInfovia) {
             selectInfovia.addEventListener("change", executarAnaliseEspacial);
@@ -94,11 +98,11 @@
         }
     }
 
-    // Evento contínuo ao arrastar o slider (atualiza apenas o texto para performance)
+    // Evento contínuo ao arrastar o slider (sincroniza o input numérico)
     function onSliderInput(e) {
         const valor = e.target.value;
-        if (labelDistancia) {
-            labelDistancia.textContent = `${valor} km`;
+        if (inputDistancia) {
+            inputDistancia.value = valor;
         }
         
         // Limpar timer anterior do debounce
@@ -110,6 +114,46 @@
         bufferDebounceTimer = setTimeout(() => {
             executarAnaliseEspacial();
         }, 150);
+    }
+
+    // Evento disparado ao digitar valor no campo de texto (debounce)
+    function onInputDistanciaInput(e) {
+        let valor = parseFloat(e.target.value);
+        if (isNaN(valor)) valor = 0;
+        
+        if (valor > 50) valor = 50;
+        if (valor < 0) valor = 0;
+
+        if (sliderDistancia) {
+            sliderDistancia.value = valor;
+        }
+
+        if (bufferDebounceTimer) {
+            clearTimeout(bufferDebounceTimer);
+        }
+
+        bufferDebounceTimer = setTimeout(() => {
+            executarAnaliseEspacial();
+        }, 150);
+    }
+
+    // Evento disparado ao confirmar/mudar valor (soltar foco ou enter)
+    function onInputDistanciaChange(e) {
+        let valor = parseFloat(e.target.value);
+        if (isNaN(valor)) valor = 0;
+        
+        if (valor > 50) valor = 50;
+        if (valor < 0) valor = 0;
+        e.target.value = valor;
+
+        if (sliderDistancia) {
+            sliderDistancia.value = valor;
+        }
+
+        if (bufferDebounceTimer) {
+            clearTimeout(bufferDebounceTimer);
+        }
+        executarAnaliseEspacial();
     }
 
     // Evento disparado quando o usuário solta o mouse do slider (garantia de cálculo final)
@@ -495,7 +539,7 @@
                         // Se o raio estiver em 0, define automaticamente para 10 km para mostrar comunidades
                         if (parseFloat(sliderDistancia.value) === 0) {
                             sliderDistancia.value = 10;
-                            if (labelDistancia) labelDistancia.textContent = "10 km";
+                            if (inputDistancia) inputDistancia.value = 10;
                         }
                         
                         executarAnaliseEspacial();
@@ -512,7 +556,9 @@
         if (selectCategoriaCt) selectCategoriaCt.value = "all";  // Reseta Categoria Censo
         if (sliderDistancia) {
             sliderDistancia.value = 0;
-            if (labelDistancia) labelDistancia.textContent = "0 km";
+        }
+        if (inputDistancia) {
+            inputDistancia.value = 0;
         }
         executarAnaliseEspacial();
         
