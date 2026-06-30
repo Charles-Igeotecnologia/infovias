@@ -1552,3 +1552,8 @@ input:checked + .slider:before {
     transition: max-height 0.45s cubic-bezier(0.25, 0.8, 0.25, 1), opacity 0.35s ease;
     overflow: hidden;
 }
+
+/* Estilo para polígonos achurados no Leaflet */
+.leaflet-polygon-achurado {
+    fill: url(#achura-diagonal) !important;
+}

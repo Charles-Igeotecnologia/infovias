@@ -238,6 +238,20 @@
         if (modoMunicipal) {
             // ================= MODO B: FILTRO TERRITORIAL MUNICIPAL =================
             const uf = ufSelecionada;
+            
+            // Assegurar carregamento dos setores censitários da UF em segundo plano se ainda não feito (Lazy cache)
+            // Necessário para detalhamento de setores no relatório e contagem de setores afetados
+            if (!window._setoresCache[uf]) {
+                try {
+                    const res = await fetch(`setores_censitarios/setores_${uf}_50km.geojson`);
+                    if (res.ok) {
+                        window._setoresCache[uf] = await res.json();
+                    }
+                } catch (err) {
+                    console.error(`Erro ao carregar setores da UF: ${uf}`, err);
+                }
+            }
+
             const munData = window._municipiosCache[uf];
             if (!munData || !munData.features) {
                 console.warn("Aguardando carregamento da malha de municípios da UF.");
@@ -306,40 +320,45 @@
             const todasInfovias = dataLinhas.features;
             todasInfovias.forEach(infovia => {
                 try {
-                    // Verificar intersecção da infovia com o polígono do município
-                    const intersecta = turf.booleanIntersects(infovia.geometry, munFeature.geometry);
-                    if (intersecta) {
+                    // Testar se há pontos de intersecção entre a linha e o município usando Turf
+                    const interseccao = turf.lineIntersect(infovia, munFeature);
+                    if (interseccao && interseccao.features.length > 0) {
+                        linhasAfetadasList.push(infovia);
+                        return;
+                    }
+                    
+                    // Se não intersecta a borda, testar se a linha está totalmente contida (se o primeiro ponto está dentro)
+                    let primeiroPt;
+                    const coords = infovia.geometry.coordinates;
+                    if (infovia.geometry.type === "LineString") {
+                        primeiroPt = coords[0];
+                    } else if (infovia.geometry.type === "MultiLineString") {
+                        primeiroPt = coords[0][0];
+                    }
+                    
+                    if (primeiroPt && turf.booleanPointInPolygon(turf.point(primeiroPt), munFeature)) {
                         linhasAfetadasList.push(infovia);
                     }
                 } catch (err) {
-                    // Fallback geométrico manual se erro no Turf
-                    let tocou = false;
-                    const coords = infovia.geometry.coordinates;
-                    if (infovia.geometry.type === "LineString") {
-                        for (let pt of coords) {
-                            if (turf.booleanPointInPolygon(turf.point(pt), munFeature)) {
-                                tocou = true;
-                                break;
-                            }
-                        }
-                    }
-                    if (tocou) {
-                        linhasAfetadasList.push(infovia);
-                    }
+                    console.error("Erro na verificação espacial da infovia:", err);
                 }
             });
 
-            // Adicionar o polígono de limite municipal ao mapa com visual de destaque azul/ciano sutil
+            // Adicionar o polígono de limite municipal ao mapa com visual de destaque achurado sutil
             L.geoJSON(munFeature, {
+                className: 'leaflet-polygon-achurado', // Aplica a textura no CSS
                 style: {
                     color: '#0284c7',
-                    weight: 1.5,
+                    weight: 1.8,
                     dashArray: '6, 6',
                     fillColor: '#0284c7',
-                    fillOpacity: 0.03,
-                    opacity: 0.5
+                    fillOpacity: 0.12, // Preenchimento necessário para as achuras
+                    opacity: 0.7
                 }
             }).addTo(activeBufferLayer);
+
+            // Injetar o padrão SVG de achuras no mapa
+            inicializarPadraoAchura();
 
             console.timeEnd("Processamento Turf.js");
             console.log(`Análise Territorial de Município concluída: ${localidadesAfetadasList.length} comunidades. Demografia: ${totalPopEst} hab., ${totalDomEst} dom.`);
@@ -501,6 +520,39 @@
         if (activeBufferLayer) {
             activeBufferLayer.clearLayers();
         }
+    }
+
+    // Cria um padrão de achura diagonal no elemento SVG do Leaflet
+    function inicializarPadraoAchura() {
+        const svgEl = document.querySelector('.leaflet-zoom-pane svg');
+        if (!svgEl) return;
+        
+        if (svgEl.querySelector('#achura-diagonal')) return;
+        
+        let defs = svgEl.querySelector('defs');
+        if (!defs) {
+            defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
+            svgEl.insertBefore(defs, svgEl.firstChild);
+        }
+        
+        const pattern = document.createElementNS("http://www.w3.org/2000/svg", "pattern");
+        pattern.setAttribute("id", "achura-diagonal");
+        pattern.setAttribute("width", "10");
+        pattern.setAttribute("height", "10");
+        pattern.setAttribute("patternUnits", "userSpaceOnUse");
+        pattern.setAttribute("patternTransform", "rotate(45)");
+        
+        const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+        line.setAttribute("x1", "0");
+        line.setAttribute("y1", "0");
+        line.setAttribute("x2", "0");
+        line.setAttribute("y2", "10");
+        line.setAttribute("stroke", "#0284c7");
+        line.setAttribute("stroke-width", "2.0");
+        line.setAttribute("opacity", "0.45"); // Achura sutil e moderna
+        
+        pattern.appendChild(line);
+        defs.appendChild(pattern);
     }
 
     // Restaura as propriedades padrão de raio e borda de todos os circleMarkers

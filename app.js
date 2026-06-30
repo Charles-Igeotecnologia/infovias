@@ -1203,14 +1203,18 @@ document.addEventListener("DOMContentLoaded", () => {
         selectMun.addEventListener("change", () => {
             const cdMun = selectMun.value;
             
-            // Enquadrar o mapa no limite do municipio selecionado
-            if (cdMun !== "all" && window.geoportalLayers.municipiosLayer) {
-                window.geoportalLayers.municipiosLayer.eachLayer(layer => {
-                    if (String(layer.feature.properties.CD_MUN) === String(cdMun)) {
-                        window.map.fitBounds(layer.getBounds(), { padding: [50, 50] });
-                        layer.openPopup();
+            // Enquadrar o mapa no limite do municipio selecionado a partir do GeoJSON do cache
+            if (cdMun !== "all") {
+                const selectUf = document.getElementById("select-uf");
+                const uf = selectUf ? selectUf.value : "all";
+                const munData = window._municipiosCache[uf];
+                if (munData && munData.features) {
+                    const feat = munData.features.find(f => String(f.properties.CD_MUN) === String(cdMun));
+                    if (feat) {
+                        const tempLayer = L.geoJSON(feat);
+                        window.map.fitBounds(tempLayer.getBounds(), { padding: [50, 50] });
                     }
-                });
+                }
             }
             
             // Disparar analise espacial
