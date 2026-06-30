@@ -329,15 +329,15 @@
                 }
             });
 
-            // Adicionar o polígono de limite municipal ao mapa com visual de destaque azul/ciano
+            // Adicionar o polígono de limite municipal ao mapa com visual de destaque azul/ciano sutil
             L.geoJSON(munFeature, {
                 style: {
                     color: '#0284c7',
-                    weight: 3.0,
-                    dashArray: '4, 4',
+                    weight: 1.5,
+                    dashArray: '6, 6',
                     fillColor: '#0284c7',
-                    fillOpacity: 0.12,
-                    opacity: 0.85
+                    fillOpacity: 0.03,
+                    opacity: 0.5
                 }
             }).addTo(activeBufferLayer);
 
@@ -822,9 +822,14 @@
         }
     }
 
-    // Gera e baixa o arquivo CSV com todas as comunidades na área de influência
+    // Gera e baixa o arquivo CSV com todas as comunidades na área de influência ou município
     function exportarDadosParaCSV() {
         if (localidadesAfetadasList.length === 0) return;
+
+        const selectMunicipio = document.getElementById("select-municipio");
+        const cdMunSelecionado = (selectMunicipio && !selectMunicipio.disabled) ? selectMunicipio.value : "all";
+        const modoMunicipal = cdMunSelecionado !== "all";
+        const municipioNome = modoMunicipal ? selectMunicipio.options[selectMunicipio.selectedIndex].text : "";
 
         console.log("Iniciando exportação de CSV...");
         
@@ -858,7 +863,12 @@
         const raio        = sliderDistancia ? sliderDistancia.value : 0;
         
         link.setAttribute("href",     url);
-        link.setAttribute("download", `comunidades_impactadas_infovia_${infoviaNome}_raio_${raio}km.csv`);
+        if (modoMunicipal) {
+            const munNomeLimpo = municipioNome.replace(/\s+/g, "_");
+            link.setAttribute("download", `comunidades_municipio_${munNomeLimpo}.csv`);
+        } else {
+            link.setAttribute("download", `comunidades_impactadas_infovia_${infoviaNome}_raio_${raio}km.csv`);
+        }
         link.style.visibility = 'hidden';
         document.body.appendChild(link);
         link.click();
@@ -874,6 +884,11 @@
         console.log("Iniciando geração de relatório HTML...");
 
         // Coletar parâmetros atuais da análise
+        const selectMunicipio = document.getElementById("select-municipio");
+        const cdMunSelecionado = (selectMunicipio && !selectMunicipio.disabled) ? selectMunicipio.value : "all";
+        const modoMunicipal = cdMunSelecionado !== "all";
+        const municipioNome = modoMunicipal ? selectMunicipio.options[selectMunicipio.selectedIndex].text : "";
+
         const infoviaSelecionada = selectInfovia && selectInfovia.value !== "all" ? selectInfovia.value : "Todas as Infovias (Geral)";
         const ufSelecionada = selectUF && selectUF.value !== "all" ? selectUF.value : "Todos os Estados";
         const categoriaSelecionada = selectCategoriaCt && selectCategoriaCt.value !== "all" ? selectCategoriaCt.value : "Todas as Categorias";
@@ -1015,7 +1030,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Relatório de Impacto - Geoportal InfoVias</title>
+    <title>${modoMunicipal ? `Relatório de Impacto - ${municipioNome} (${ufSelecionada})` : 'Relatório de Impacto - Geoportal InfoVias'}</title>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
     <style>
@@ -1210,6 +1225,24 @@
             
             <!-- PARÂMETROS APLICADOS -->
             <div class="params-grid">
+                ${modoMunicipal ? `
+                <div class="param-item">
+                    <span class="param-label">Município Analisado</span>
+                    <span class="param-val" style="color: #0284c7; font-weight: bold;">${municipioNome} (${ufSelecionada})</span>
+                </div>
+                <div class="param-item">
+                    <span class="param-label">Tipo de Análise</span>
+                    <span class="param-val" style="color: #0284c7; font-weight: bold;">Filtro Territorial Político</span>
+                </div>
+                <div class="param-item">
+                    <span class="param-label">Filtro de Categoria</span>
+                    <span class="param-val">${categoriaSelecionada}</span>
+                </div>
+                <div class="param-item">
+                    <span class="param-label">Fonte de Dados</span>
+                    <span class="param-val">Total Real IBGE (Censo 2022)</span>
+                </div>
+                ` : `
                 <div class="param-item">
                     <span class="param-label">Infovia Analisada</span>
                     <span class="param-val">${infoviaSelecionada}</span>
@@ -1226,13 +1259,14 @@
                     <span class="param-label">Filtro de Categoria (Censo)</span>
                     <span class="param-val">${categoriaSelecionada}</span>
                 </div>
+                `}
             </div>
         </div>
 
         <!-- CARDS DE ESTATÍSTICA -->
         <div class="stats-grid">
             <div class="stat-card total">
-                <div class="stat-label">Comunidades Afetadas</div>
+                <div class="stat-label">Comunidades no Limite</div>
                 <div class="stat-val">${total}</div>
             </div>
             <div class="stat-card sede">
@@ -1257,7 +1291,7 @@
                 <div style="font-size: 11px; color: #334155; margin-bottom: 6px;">
                     Interior: <strong>${popInteriorEst.toLocaleString('pt-BR')} hab.</strong> | Capitais: ${popCapitalEst.toLocaleString('pt-BR')} hab.
                 </div>
-                <div style="font-size: 9px; color: #64748b; line-height: 1.4;">Soma populacional de todos os setores censitários interceptados pela área de influência ativa.</div>
+                <div style="font-size: 9px; color: #64748b; line-height: 1.4;">${modoMunicipal ? `População total real oficial de todo o território do município do Censo 2022 (IBGE).` : `Soma populacional de todos os setores censitários interceptados pela área de influência ativa.`}</div>
             </div>
             <div class="stat-card" style="border-left: 4px solid var(--accent-cyan); text-align: left; background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.02); padding: 16px; border: 1px solid var(--border); border-radius: 10px;">
                 <div class="stat-label" style="color: var(--accent-cyan); font-weight: 700; font-size: 10px; text-transform: uppercase; margin-bottom: 6px;">Total de Domicílios</div>
@@ -1265,7 +1299,7 @@
                 <div style="font-size: 11px; color: #334155; margin-bottom: 6px;">
                     Interior: <strong>${domInteriorEst.toLocaleString('pt-BR')} res.</strong> | Capitais: ${domCapitalEst.toLocaleString('pt-BR')} res.
                 </div>
-                <div style="font-size: 9px; color: #64748b; line-height: 1.4;">Quantidade de domicílios nos setores censitários intersectados (${setoresAfetadosEst} setores afetados).</div>
+                <div style="font-size: 9px; color: #64748b; line-height: 1.4;">${modoMunicipal ? `Total real de domicílios de todo o território do município do Censo 2022 (IBGE) (${setoresAfetadosEst} setores urbanos e rurais).` : `Quantidade de domicílios nos setores censitários intersectados (${setoresAfetadosEst} setores afetados).`}</div>
             </div>
         </div>
 
@@ -1281,7 +1315,7 @@
         
         <!-- TABELA DE RESULTADOS -->
         <div class="table-card">
-            <h3>Relação Detalhada de Comunidades no Raio de Influência (${total} itens)</h3>
+            <h3>${modoMunicipal ? `Relação Detalhada de Comunidades no Território de ${municipioNome} (${total} itens)` : `Relação Detalhada de Comunidades no Raio de Influência (${total} itens)`}</h3>
             <table>
                 <thead>
                     <tr>
