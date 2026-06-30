@@ -127,10 +127,19 @@ document.addEventListener("DOMContentLoaded", () => {
     const swPontos = document.getElementById("switch-pontos");
     const swLinhas = document.getElementById("switch-linhas");
     const swCalor  = document.getElementById("switch-calor");
+    const swAte50  = document.getElementById("switch-dist-ate50");
+    const swMais50 = document.getElementById("switch-dist-mais50");
+    const subFiltros = document.getElementById("sub-filtros-comunidades");
 
     // Sincronizar UI quando o Estado mudar
     GeoportalState.inscrever((camada, ativa) => {
-        if (camada === 'camadaPontos' && swPontos) swPontos.checked = ativa;
+        if (camada === 'camadaPontos') {
+            if (swPontos) swPontos.checked = ativa;
+            if (subFiltros) {
+                subFiltros.style.opacity = ativa ? "1" : "0.5";
+                subFiltros.style.pointerEvents = ativa ? "auto" : "none";
+            }
+        }
         if (camada === 'camadaLinhas' && swLinhas) swLinhas.checked = ativa;
         if (camada === 'camadaCalor'  && swCalor)  swCalor.checked  = ativa;
     });
@@ -139,6 +148,25 @@ document.addEventListener("DOMContentLoaded", () => {
     if (swPontos) swPontos.addEventListener("change", (e) => GeoportalState.atualizarCamada('camadaPontos', e.target.checked));
     if (swLinhas) swLinhas.addEventListener("change", (e) => GeoportalState.atualizarCamada('camadaLinhas', e.target.checked));
     if (swCalor)  swCalor.addEventListener("change",  (e) => GeoportalState.atualizarCamada('camadaCalor',  e.target.checked));
+
+    // Ouvintes para os sub-filtros de distância
+    const reexecutarFiltragemDistancia = () => {
+        const uf = document.getElementById("select-uf")?.value || "all";
+        const cat = document.getElementById("select-categoria-ct")?.value || "all";
+        if (window.filtrarLocalidadesNoMapa) {
+            window.filtrarLocalidadesNoMapa(uf, cat);
+        }
+    };
+
+    if (swAte50) swAte50.addEventListener("change", reexecutarFiltragemDistancia);
+    if (swMais50) swMais50.addEventListener("change", reexecutarFiltragemDistancia);
+
+    // Configurar estado inicial dos subfiltros
+    if (subFiltros && swPontos) {
+        const ativa = swPontos.checked;
+        subFiltros.style.opacity = ativa ? "1" : "0.5";
+        subFiltros.style.pointerEvents = ativa ? "auto" : "none";
+    }
 
     // MELHORIA 2.1: Colapso/Expansão da Sidebar
     inicializarToggleSidebar();
@@ -254,6 +282,11 @@ async function carregarBasesGeograficas() {
         configurarLocalidades(resLocalidades);
         configurarMapaDeCalor(resLocalidades);
         inicializarBuscaLocalidades(resLocalidades);
+        
+        // Filtragem inicial das localidades (Melhoria 5.0)
+        if (window.filtrarLocalidadesNoMapa) {
+            window.filtrarLocalidadesNoMapa("all", "all");
+        }
 
         setProgress(100, "Pronto!");
 
@@ -720,6 +753,12 @@ window.filtrarLocalidadesNoMapa = function(ufSelecionada, categoriaSelecionada) 
     const ufs = ufSelecionada || "all";
     const cats = categoriaSelecionada || "all";
     
+    // Obter estado dos sub-filtros de distância
+    const swAte50 = document.getElementById("switch-dist-ate50");
+    const swMais50 = document.getElementById("switch-dist-mais50");
+    const mostrarAte50 = swAte50 ? swAte50.checked : true;
+    const mostrarMais50 = swMais50 ? swMais50.checked : false;
+    
     // Armazena se a camada de cluster está ativa no mapa atualmente
     const estavaAtiva = map.hasLayer(clusterGroup);
     
@@ -735,11 +774,25 @@ window.filtrarLocalidadesNoMapa = function(ufSelecionada, categoriaSelecionada) 
     
     geojson.features.forEach(feature => {
         if (feature._markerRef) {
-            const atendeUf  = (ufs === "all" || feature.properties.SIGLA_UF === ufs);
-            const atendeCat = (cats === "all" || feature.properties.CT_LOCALIDADE === cats);
+            const props = feature.properties;
+            const atendeUf  = (ufs === "all" || props.SIGLA_UF === ufs);
+            const atendeCat = (cats === "all" || props.CT_LOCALIDADE === cats);
             
-            // Se atende a ambos os critérios, adiciona ao cluster
-            if (atendeUf && atendeCat) {
+            // Filtragem por distância das infovias (Melhoria 5.0)
+            const dist = props.DIST_INFOVIA;
+            let atendeDist = false;
+            
+            // Se a distância for nula ou indefinida, assume-se como fora do raio (> 50 km)
+            const estaAte50 = (dist !== undefined && dist !== null && dist <= 50.0);
+            
+            if (estaAte50 && mostrarAte50) {
+                atendeDist = true;
+            } else if (!estaAte50 && mostrarMais50) {
+                atendeDist = true;
+            }
+            
+            // Se atende a todos os critérios, adiciona ao cluster
+            if (atendeUf && atendeCat && atendeDist) {
                 marcadoresAdicionar.push(feature._markerRef);
             }
         }

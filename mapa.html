@@ -60,6 +60,29 @@
                     <span class="slider"></span>
                 </label>
             </div>
+            <!-- Sub-filtros por distância das infovias (Melhoria 5.0) -->
+            <div id="sub-filtros-comunidades" style="display: flex; flex-direction: column; gap: 6px; margin-left: 15px; margin-bottom: 8px; padding-left: 8px; border-left: 2px solid rgba(255, 255, 255, 0.1); transition: opacity 0.3s ease;">
+                <div class="layer-switch" style="font-size: 11px; padding: 2px 0; margin-bottom: 2px;">
+                    <label for="switch-dist-ate50" style="color: var(--text-secondary); display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 11px;">
+                        <i class="fa-solid fa-circle-nodes" style="color: var(--accent-cyan); font-size: 10px;"></i>
+                        Comunidades a até 50 km
+                    </label>
+                    <label class="switch">
+                        <input type="checkbox" id="switch-dist-ate50" checked>
+                        <span class="slider" id="slider-dist-ate50"></span>
+                    </label>
+                </div>
+                <div class="layer-switch" style="font-size: 11px; padding: 2px 0;">
+                    <label for="switch-dist-mais50" style="color: var(--text-secondary); display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 11px;">
+                        <i class="fa-solid fa-cloud" style="color: var(--text-muted); font-size: 10px;"></i>
+                        Além de 50 km (Fora)
+                    </label>
+                    <label class="switch">
+                        <input type="checkbox" id="switch-dist-mais50">
+                        <span class="slider" id="slider-dist-mais50"></span>
+                    </label>
+                </div>
+            </div>
             <div class="layer-switch">
                 <label for="switch-linhas">
                     <i class="fa-solid fa-route" style="color: var(--accent-cyan);"></i>
