@@ -865,9 +865,9 @@ function preencherFiltroInfovias(geojson) {
     });
 }
 
-// 5.6 Adiciona Legenda de Convenções Temáticas no Canto Superior Esquerdo
+// 5.6 Adiciona Legenda de Convenções Temáticas no Canto Inferior Esquerdo
 function adicionarLegendaAoMapa() {
-    const legend = L.control({ position: 'topleft' });
+    const legend = L.control({ position: 'bottomleft' });
 
     legend.onAdd = function(map) {
         const div = L.DomUtil.create('div', 'info legend glass-panel');

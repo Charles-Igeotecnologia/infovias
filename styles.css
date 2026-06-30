@@ -1092,11 +1092,8 @@ input:checked + .slider:before {
     min-width: 200px;
     pointer-events: auto;
     
-    /* Posicionado abaixo do #floating-menu, no lado esquerdo */
-    position: absolute !important;
-    top: 300px !important;
-    left: 20px !important;
-    margin: 0 !important;
+    /* Permite que o Leaflet controle o posicionamento no canto inferior esquerdo */
+    margin: 0 0 15px 15px !important;
     z-index: 1000;
 }
 .legend h4 {
