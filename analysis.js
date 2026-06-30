@@ -226,8 +226,12 @@
         // Criar uma FeatureCollection com as linhas selecionadas
         const featureCollectionLinhas = turf.featureCollection(linhasParaBuffer);
 
-        // 2. Gerar o polígono de Buffer ao redor das linhas selecionadas
-        const bufferGeoJSON = turf.buffer(featureCollectionLinhas, raioKm, { units: 'kilometers' });
+        // 1.5. Combinar as linhas em uma única geometria MultiLineString para dissolver buffers sobrepostos
+        const combinadas = turf.combine(featureCollectionLinhas);
+        const linhaCombinada = combinadas.features[0];
+
+        // 2. Gerar o polígono de Buffer unificado (dissolvido) ao redor das linhas combinadas
+        const bufferGeoJSON = turf.buffer(linhaCombinada, raioKm, { units: 'kilometers' });
 
         // 3. Adicionar o polígono de buffer ao mapa com estilização suave e moderna (Glassmorphism cian)
         L.geoJSON(bufferGeoJSON, {
@@ -253,19 +257,8 @@
             // Pular localidades de outra categoria censo se filtro ativo
             if (categoriaSelecionada !== "all" && localidade.properties.CT_LOCALIDADE !== categoriaSelecionada) return;
 
-            // Verificação espacial robusta contra FeatureCollection retornado pelo Turf.js
-            let estaDentro = false;
-            if (bufferGeoJSON.type === "FeatureCollection") {
-                for (let i = 0; i < bufferGeoJSON.features.length; i++) {
-                    const poly = bufferGeoJSON.features[i];
-                    if (poly.geometry && turf.booleanPointInPolygon(localidade.geometry, poly)) {
-                        estaDentro = true;
-                        break;
-                    }
-                }
-            } else {
-                estaDentro = turf.booleanPointInPolygon(localidade.geometry, bufferGeoJSON);
-            }
+            // Verificação espacial robusta contra o buffer unificado
+            const estaDentro = turf.booleanPointInPolygon(localidade.geometry, bufferGeoJSON);
 
             if (estaDentro) {
                 localidadesAfetadasList.push(localidade);
@@ -332,18 +325,8 @@
                     }
                 }
                 
-                let estaDentro = false;
-                if (bufferGeoJSON.type === "FeatureCollection") {
-                    for (let i = 0; i < bufferGeoJSON.features.length; i++) {
-                        const poly = bufferGeoJSON.features[i];
-                        if (poly.geometry && turf.booleanPointInPolygon(pontoRepresentativo, poly)) {
-                            estaDentro = true;
-                            break;
-                        }
-                    }
-                } else {
-                    estaDentro = turf.booleanPointInPolygon(pontoRepresentativo, bufferGeoJSON);
-                }
+                // Verificação espacial robusta contra o buffer unificado
+                const estaDentro = turf.booleanPointInPolygon(pontoRepresentativo, bufferGeoJSON);
                 
                 if (estaDentro) {
                     totalPopEst += parseInt(setor.properties.POPULACAO) || 0;
