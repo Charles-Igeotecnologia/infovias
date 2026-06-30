@@ -285,6 +285,7 @@ input:checked + .slider:before {
 #switch-calor:checked + .slider { background-color: var(--priority-high); }
 #switch-dist-ate50:checked + #slider-dist-ate50 { background-color: var(--accent-cyan); }
 #switch-dist-mais50:checked + #slider-dist-mais50 { background-color: #64748b; }
+#switch-setores:checked + #slider-setores { background-color: #b927fc; }
 
 /* Barra Central de Medição (Topo Centralizado) */
 #custom-measure-bar {

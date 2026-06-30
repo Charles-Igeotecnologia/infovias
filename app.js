@@ -12,15 +12,20 @@ window.geoportalLayers = {
     localidadesCluster: null,
     infoviasLayer: null,
     pontosEstrategicosLayer: null,
-    heatmapLayer: null
+    heatmapLayer: null,
+    setoresLayer: null
 };
+
+// Cache de dados de setores censitários carregados por UF
+window._setoresCache = {};
 
 // Gerenciador de Estado Centralizado (Previne loops e sincroniza Sidebar / Floating Menu / Leaflet)
 const GeoportalState = {
     state: {
         camadaPontos: true,
         camadaLinhas: true,
-        camadaCalor: false
+        camadaCalor: false,
+        camadaSetores: false
     },
     listeners: [],
     
@@ -62,6 +67,15 @@ const GeoportalState = {
                 map.addLayer(window.geoportalLayers.heatmapLayer);
             } else {
                 map.removeLayer(window.geoportalLayers.heatmapLayer);
+            }
+        } else if (chave === 'camadaSetores') {
+            if (valor) {
+                // Carrega sob demanda com base no estado selecionado
+                carregarSetoresCensitarios();
+            } else {
+                if (window.geoportalLayers.setoresLayer) {
+                    map.removeLayer(window.geoportalLayers.setoresLayer);
+                }
             }
         }
     }
@@ -142,12 +156,18 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         if (camada === 'camadaLinhas' && swLinhas) swLinhas.checked = ativa;
         if (camada === 'camadaCalor'  && swCalor)  swCalor.checked  = ativa;
+        if (camada === 'camadaSetores') {
+            const swSetores = document.getElementById("switch-setores");
+            if (swSetores) swSetores.checked = ativa;
+        }
     });
 
     // Escutar eventos de cliques na interface para atualizar o Estado
     if (swPontos) swPontos.addEventListener("change", (e) => GeoportalState.atualizarCamada('camadaPontos', e.target.checked));
     if (swLinhas) swLinhas.addEventListener("change", (e) => GeoportalState.atualizarCamada('camadaLinhas', e.target.checked));
     if (swCalor)  swCalor.addEventListener("change",  (e) => GeoportalState.atualizarCamada('camadaCalor',  e.target.checked));
+    const swSetores = document.getElementById("switch-setores");
+    if (swSetores) swSetores.addEventListener("change", (e) => GeoportalState.atualizarCamada('camadaSetores', e.target.checked));
 
     // Ouvintes para os sub-filtros de distância
     const reexecutarFiltragemDistancia = () => {
@@ -1013,3 +1033,144 @@ function inicializarMenusColapsaveis() {
         }
     }
 }
+
+// ===========================================================
+// 6.0 SETORES CENSITÁRIOS - Carregamento sob Demanda (Lazy)
+// ===========================================================
+
+// Mapa de UF -> arquivo GeoJSON otimizado
+const SETORES_FILES = {
+    "AM": "setores_censitarios/setores_AM_50km.geojson",
+    "AP": "setores_censitarios/setores_AP_50km.geojson",
+    "PA": "setores_censitarios/setores_PA_50km.geojson",
+    "RR": "setores_censitarios/setores_RR_50km.geojson"
+};
+
+// Cores por situação do setor (Urbano vs Rural)
+const SETOR_STYLES = {
+    "Urbana": { fillColor: "#b927fc", fillOpacity: 0.25, color: "#b927fc", weight: 0.8, opacity: 0.6 },
+    "Rural":  { fillColor: "#00f2fe", fillOpacity: 0.12, color: "#00d2ff", weight: 0.5, opacity: 0.4 }
+};
+const SETOR_STYLE_DEFAULT = { fillColor: "#64748b", fillOpacity: 0.10, color: "#94a3b8", weight: 0.5, opacity: 0.4 };
+
+/**
+ * Carrega os setores censitários filtrados (ate 50 km das infovias).
+ * Se "all" estiver selecionado, carrega todos os 4 estados em sequência.
+ * Usa cache para evitar recarregamento.
+ */
+async function carregarSetoresCensitarios() {
+    const map = window.map;
+    if (!map) return;
+
+    // Obter a UF selecionada
+    const selectUf = document.getElementById("select-uf");
+    const ufSelecionada = selectUf ? selectUf.value : "all";
+
+    // Remover camada anterior
+    if (window.geoportalLayers.setoresLayer) {
+        map.removeLayer(window.geoportalLayers.setoresLayer);
+        window.geoportalLayers.setoresLayer = null;
+    }
+
+    // Determinar quais UFs carregar
+    const ufsParaCarregar = ufSelecionada === "all" 
+        ? Object.keys(SETORES_FILES) 
+        : [ufSelecionada];
+
+    // Verificar se a UF tem dados disponíveis
+    const ufsValidas = ufsParaCarregar.filter(uf => SETORES_FILES[uf]);
+    if (ufsValidas.length === 0) return;
+
+    // Carregar GeoJSON de cada UF (com cache)
+    const allFeatures = [];
+    
+    for (const uf of ufsValidas) {
+        let data = window._setoresCache[uf];
+        
+        if (!data) {
+            try {
+                const res = await fetch(SETORES_FILES[uf]);
+                if (!res.ok) {
+                    console.warn(`Setores ${uf}: arquivo não encontrado (${res.status})`);
+                    continue;
+                }
+                data = await res.json();
+                window._setoresCache[uf] = data;
+            } catch (err) {
+                console.warn(`Setores ${uf}: erro ao carregar`, err);
+                continue;
+            }
+        }
+        
+        if (data && data.features) {
+            allFeatures.push(...data.features);
+        }
+    }
+
+    if (allFeatures.length === 0) return;
+
+    // Criar a camada GeoJSON com estilização temática
+    const setoresLayer = L.geoJSON(
+        { type: "FeatureCollection", features: allFeatures },
+        {
+            style: function(feature) {
+                const situacao = feature.properties?.SITUACAO || "";
+                return SETOR_STYLES[situacao] || SETOR_STYLE_DEFAULT;
+            },
+            onEachFeature: function(feature, layer) {
+                const props = feature.properties || {};
+                const situacao = props.SITUACAO || "N/A";
+                const badgeClass = situacao === "Urbana" ? "sede" : "rural";
+                
+                const popupContent = `
+                    <div style="min-width: 260px; font-family: 'Inter', sans-serif;">
+                        <h4 style="margin-bottom: 8px; font-size: 12px; color: #b927fc; font-weight: 600; display: flex; justify-content: space-between; align-items: center;">
+                            <span>Setor Censitário</span>
+                            <span class="prio-badge ${badgeClass}" style="font-size: 8px; padding: 2px 6px;">${situacao}</span>
+                        </h4>
+                        <table class="popup-report-table">
+                            <tr><th>Código</th><td>${props.CD_SETOR || 'N/A'}</td></tr>
+                            <tr><th>Município</th><td>${props.NM_MUN || 'N/A'}</td></tr>
+                            <tr><th>UF</th><td>${props.NM_UF || 'N/A'}</td></tr>
+                            <tr><th>Situação</th><td><strong>${situacao}</strong></td></tr>
+                            <tr><th>Área (km²)</th><td>${props.AREA_KM2 ? props.AREA_KM2.toFixed(2) : 'N/A'}</td></tr>
+                            <tr><th>Distrito</th><td>${props.NM_DIST || 'N/A'}</td></tr>
+                            <tr><th>Bairro</th><td>${props.NM_BAIRRO || 'N/A'}</td></tr>
+                            <tr><th>Dist. Infovia</th><td><strong>${props.DIST_INFOVIA ? props.DIST_INFOVIA.toFixed(1) + ' km' : 'N/A'}</strong></td></tr>
+                        </table>
+                    </div>
+                `;
+                layer.bindPopup(popupContent, { maxWidth: 300, autoPan: true });
+                
+                // Hover highlight
+                layer.on('mouseover', function() {
+                    this.setStyle({ fillOpacity: 0.5, weight: 2 });
+                });
+                layer.on('mouseout', function() {
+                    const s = feature.properties?.SITUACAO || "";
+                    const original = SETOR_STYLES[s] || SETOR_STYLE_DEFAULT;
+                    this.setStyle(original);
+                });
+            }
+        }
+    );
+
+    window.geoportalLayers.setoresLayer = setoresLayer;
+    
+    // Somente adiciona se o switch estiver ligado
+    if (GeoportalState.state.camadaSetores) {
+        map.addLayer(setoresLayer);
+    }
+}
+
+// Recarregar setores quando o filtro de UF mudar (se a camada estiver ativa)
+document.addEventListener("DOMContentLoaded", () => {
+    const selectUf = document.getElementById("select-uf");
+    if (selectUf) {
+        selectUf.addEventListener("change", () => {
+            if (GeoportalState.state.camadaSetores) {
+                carregarSetoresCensitarios();
+            }
+        });
+    }
+});
