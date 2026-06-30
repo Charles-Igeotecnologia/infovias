@@ -197,8 +197,21 @@
         restaurarEstiloOriginalLocalidades();
         localidadesAfetadasList = [];
 
-        // Atualizar estatísticas se o raio for 0 (reseta para zero e limpa lista)
-        if (raioKm === 0) {
+        const selectMunicipio = document.getElementById("select-municipio");
+        const cdMunSelecionado = (selectMunicipio && !selectMunicipio.disabled) ? selectMunicipio.value : "all";
+        const modoMunicipal = cdMunSelecionado !== "all";
+
+        if (modoMunicipal) {
+            // Se entramos no modo municipal, resetamos o raio/buffer para 0 visualmente para evitar conflito
+            if (sliderDistancia && sliderDistancia.value != 0) {
+                sliderDistancia.value = 0;
+                if (inputDistancia) inputDistancia.value = 0;
+                raioKm = 0;
+            }
+        }
+
+        // Atualizar estatísticas se o raio for 0 (e não for análise de município)
+        if (raioKm === 0 && !modoMunicipal) {
             totalPopEst = 0;
             totalDomEst = 0;
             setoresAfetadosEst = 0;
@@ -222,158 +235,265 @@
 
         console.time("Processamento Turf.js");
 
-        // 1. Filtrar as linhas de infovia selecionadas
-        let linhasParaBuffer = [];
-        if (infoviaSelecionada === "all") {
-            linhasParaBuffer = dataLinhas.features;
-        } else {
-            linhasParaBuffer = dataLinhas.features.filter(f => f.properties.KML_FOLDER === infoviaSelecionada);
-        }
-
-        if (linhasParaBuffer.length === 0) {
-            console.warn("Nenhuma linha de infovia selecionada para gerar buffer.");
-            atualizarEstatisticasSidebar([], 0);
-            atualizarListaSidebar([]);
-            return;
-        }
-
-        // Criar uma FeatureCollection com as linhas selecionadas
-        const featureCollectionLinhas = turf.featureCollection(linhasParaBuffer);
-
-        // 1.5. Combinar as linhas em uma única geometria MultiLineString para dissolver buffers sobrepostos
-        const combinadas = turf.combine(featureCollectionLinhas);
-        const linhaCombinada = combinadas.features[0];
-
-        // 2. Gerar o polígono de Buffer unificado (dissolvido) ao redor das linhas combinadas
-        const bufferGeoJSON = turf.buffer(linhaCombinada, raioKm, { units: 'kilometers' });
-
-        // 3. Adicionar o polígono de buffer ao mapa com estilização suave e moderna (Glassmorphism cian)
-        L.geoJSON(bufferGeoJSON, {
-            style: {
-                color: '#ff8800',
-                weight: 2,
-                dashArray: '6, 4',
-                fillColor: '#ff8800',
-                fillOpacity: 0.15,
-                opacity: 0.85
+        if (modoMunicipal) {
+            // ================= MODO B: FILTRO TERRITORIAL MUNICIPAL =================
+            const uf = ufSelecionada;
+            const munData = window._municipiosCache[uf];
+            if (!munData || !munData.features) {
+                console.warn("Aguardando carregamento da malha de municípios da UF.");
+                return;
             }
-        }).addTo(activeBufferLayer);
 
-        // 4. Filtrar quais localidades estão dentro da geometria do buffer
-        // MELHORIA 4.2: Aplicar também o filtro de UF e Categoria Censo
-        const localidadesFeatures = dataPontos.features;
-        let totalSedes = 0, totalVilas = 0, totalRurais = 0;
+            const munFeature = munData.features.find(f => String(f.properties.CD_MUN) === String(cdMunSelecionado));
+            if (!munFeature) return;
 
-        localidadesFeatures.forEach(localidade => {
-            // MELHORIA 4.2: pular localidades de outra UF se filtro ativo
-            if (ufSelecionada !== "all" && localidade.properties.SIGLA_UF !== ufSelecionada) return;
+            // 1. Obter dados demográficos totais reais oficiais do IBGE para o município
+            totalPopEst = munFeature.properties.POPULACAO_REAL || 0;
+            totalDomEst = munFeature.properties.DOMICILIOS_REAL || 0;
+            setoresAfetadosEst = 0;
+            popCapitalEst = 0;
+            popInteriorEst = 0;
+            domCapitalEst = 0;
+            domInteriorEst = 0;
 
-            // Pular localidades de outra categoria censo se filtro ativo
-            if (categoriaSelecionada !== "all" && localidade.properties.CT_LOCALIDADE !== categoriaSelecionada) return;
-
-            // Verificação espacial robusta contra o buffer unificado
-            const estaDentro = turf.booleanPointInPolygon(localidade.geometry, bufferGeoJSON);
-
-            if (estaDentro) {
-                localidadesAfetadasList.push(localidade);
-
-                // Incrementar estatísticas por categoria
-                const cat = localidade.properties.CATEGORIA_MAPA;
-                if (cat === 'Sede') totalSedes++;
-                else if (cat === 'Vila') totalVilas++;
-                else if (cat === 'Rural') totalRurais++;
-
-                // Destaque visual no Leaflet CircleMarker / Marker DOM
-                if (localidade._markerRef) {
-                    localidade._markerRef.setStyle({
-                        radius: 8.5,
-                        color: '#00f2fe', // Borda Cyan neon
-                        weight: 3.5,
-                        fillOpacity: 1.0
-                    });
-                }
+            const CODIGOS_CAPITAIS = ["1302603", "1501402", "1600303", "1400100"];
+            if (CODIGOS_CAPITAIS.includes(String(cdMunSelecionado))) {
+                popCapitalEst = totalPopEst;
+                domCapitalEst = totalDomEst;
+            } else {
+                popInteriorEst = totalPopEst;
+                domInteriorEst = totalDomEst;
             }
-        });
 
-        // 4.5. Calcular estimativa demográfica (população e domicílios) baseada nos setores censitários (Censo 2022)
-        totalPopEst = 0;
-        totalDomEst = 0;
-        setoresAfetadosEst = 0;
-        popCapitalEst = 0;
-        popInteriorEst = 0;
-        domCapitalEst = 0;
-        domInteriorEst = 0;
-
-        const CODIGOS_CAPITAIS = ["1302603", "1501402", "1600303", "1400100"]; // Manaus, Belém, Macapá, Boa Vista
-
-        // Determinar quais UFs carregar com base no filtro
-        const ufsParaCarregar = ufSelecionada === "all" ? ["AM", "AP", "PA", "RR"] : [ufSelecionada];
-        
-        // Assegurar carregamento em segundo plano no cache se ainda não feito (Lazy cache)
-        const promessasSetores = ufsParaCarregar.map(async (uf) => {
-            if (!window._setoresCache[uf]) {
-                try {
-                    const res = await fetch(`setores_censitarios/setores_${uf}_50km.geojson`);
-                    if (res.ok) {
-                        window._setoresCache[uf] = await res.json();
-                    }
-                } catch (err) {
-                    console.error(`Erro ao carregar setores para análise demográfica da UF: ${uf}`, err);
-                }
-            }
-        });
-
-        await Promise.all(promessasSetores);
-
-        // Processar cruzamento espacial contra os setores
-        ufsParaCarregar.forEach(uf => {
+            // Contar os setores censitários pertencentes a esse município no cache
             const setoresData = window._setoresCache[uf];
-            if (!setoresData || !setoresData.features) return;
-            
-            setoresData.features.forEach(setor => {
-                let pontoRepresentativo;
-                try {
-                    pontoRepresentativo = turf.centroid(setor);
-                } catch (e) {
-                    const coords = setor.geometry.coordinates;
-                    if (setor.geometry.type === "Polygon") {
-                        pontoRepresentativo = turf.point(coords[0][0]);
-                    } else if (setor.geometry.type === "MultiPolygon") {
-                        pontoRepresentativo = turf.point(coords[0][0][0]);
-                    } else {
-                        return;
+            if (setoresData && setoresData.features) {
+                setoresData.features.forEach(s => {
+                    if (String(s.properties.CD_MUN) === String(cdMunSelecionado)) {
+                        setoresAfetadosEst++;
                     }
-                }
-                
-                // Verificação espacial robusta contra o buffer unificado
-                const estaDentro = turf.booleanPointInPolygon(pontoRepresentativo, bufferGeoJSON);
-                
-                if (estaDentro) {
-                    const pop = parseInt(setor.properties.POPULACAO) || 0;
-                    const dom = parseInt(setor.properties.DOMICILIOS) || 0;
-                    const cdMun = setor.properties.CD_MUN;
-                    
-                    if (CODIGOS_CAPITAIS.includes(cdMun)) {
-                        popCapitalEst += pop;
-                        domCapitalEst += dom;
-                    } else {
-                        popInteriorEst += pop;
-                        domInteriorEst += dom;
+                });
+            }
+
+            // 2. Filtrar comunidades contidas administrativamente no município
+            const todasLocalidades = dataPontos.features;
+            let totalSedes = 0, totalVilas = 0, totalRurais = 0;
+
+            todasLocalidades.forEach(localidade => {
+                if (String(localidade.properties.CD_MUN) === String(cdMunSelecionado)) {
+                    if (categoriaSelecionada === "all" || localidade.properties.CT_LOCALIDADE === categoriaSelecionada) {
+                        localidadesAfetadasList.push(localidade);
+
+                        const cat = localidade.properties.CATEGORIA_MAPA;
+                        if (cat === 'Sede') totalSedes++;
+                        else if (cat === 'Vila') totalVilas++;
+                        else if (cat === 'Rural') totalRurais++;
+
+                        // Destaque visual no Leaflet
+                        if (localidade._markerRef) {
+                            localidade._markerRef.setStyle({
+                                radius: 8.5,
+                                color: '#00f2fe',
+                                weight: 3.5,
+                                fillOpacity: 1.0
+                            });
+                        }
                     }
-                    
-                    totalPopEst += pop;
-                    totalDomEst += dom;
-                    setoresAfetadosEst++;
                 }
             });
-        });
 
-        console.timeEnd("Processamento Turf.js");
-        console.log(`Análise concluída: ${localidadesAfetadasList.length} comunidades afetadas. Demografia: ${totalPopEst} hab., ${totalDomEst} dom. em ${setoresAfetadosEst} setores.`);
+            // 3. Filtrar InfoVias envolvidas (que cruzam ou tocam o território do município)
+            const todasInfovias = dataLinhas.features;
+            todasInfovias.forEach(infovia => {
+                try {
+                    // Verificar intersecção da infovia com o polígono do município
+                    const intersecta = turf.booleanIntersects(infovia.geometry, munFeature.geometry);
+                    if (intersecta) {
+                        linhasAfetadasList.push(infovia);
+                    }
+                } catch (err) {
+                    // Fallback geométrico manual se erro no Turf
+                    let tocou = false;
+                    const coords = infovia.geometry.coordinates;
+                    if (infovia.geometry.type === "LineString") {
+                        for (let pt of coords) {
+                            if (turf.booleanPointInPolygon(turf.point(pt), munFeature)) {
+                                tocou = true;
+                                break;
+                            }
+                        }
+                    }
+                    if (tocou) {
+                        linhasAfetadasList.push(infovia);
+                    }
+                }
+            });
 
-        // 5. Atualizar os cartões e a lista da Sidebar
-        atualizarEstatisticasSidebar(localidadesAfetadasList, raioKm);
-        atualizarListaSidebar(localidadesAfetadasList);
+            // Adicionar o polígono de limite municipal ao mapa com visual de destaque azul/ciano
+            L.geoJSON(munFeature, {
+                style: {
+                    color: '#0284c7',
+                    weight: 3.0,
+                    dashArray: '4, 4',
+                    fillColor: '#0284c7',
+                    fillOpacity: 0.12,
+                    opacity: 0.85
+                }
+            }).addTo(activeBufferLayer);
+
+            console.timeEnd("Processamento Turf.js");
+            console.log(`Análise Territorial de Município concluída: ${localidadesAfetadasList.length} comunidades. Demografia: ${totalPopEst} hab., ${totalDomEst} dom.`);
+
+            // Atualizar sidebar e lista
+            atualizarEstatisticasSidebar(localidadesAfetadasList, 0);
+            atualizarListaSidebar(localidadesAfetadasList);
+
+        } else {
+            // ================= MODO A: FILTRO DE PROXIMIDADE (BUFFER) =================
+            // 1. Filtrar as linhas de infovia selecionadas
+            let linhasParaBuffer = [];
+            if (infoviaSelecionada === "all") {
+                linhasParaBuffer = dataLinhas.features;
+            } else {
+                linhasParaBuffer = dataLinhas.features.filter(f => f.properties.KML_FOLDER === infoviaSelecionada);
+            }
+
+            if (linhasParaBuffer.length === 0) {
+                console.warn("Nenhuma linha de infovia selecionada para gerar buffer.");
+                atualizarEstatisticasSidebar([], 0);
+                atualizarListaSidebar([]);
+                return;
+            }
+
+            // Criar uma FeatureCollection com as linhas selecionadas
+            const featureCollectionLinhas = turf.featureCollection(linhasParaBuffer);
+
+            // 1.5. Combinar as linhas em uma única geometria MultiLineString para dissolver buffers sobrepostos
+            const combinadas = turf.combine(featureCollectionLinhas);
+            const linhaCombinada = combinadas.features[0];
+
+            // 2. Gerar o polígono de Buffer unificado (dissolvido) ao redor das linhas combinadas
+            const bufferGeoJSON = turf.buffer(linhaCombinada, raioKm, { units: 'kilometers' });
+
+            // 3. Adicionar o polígono de buffer ao mapa com estilização suave e moderna (Glassmorphism cian)
+            L.geoJSON(bufferGeoJSON, {
+                style: {
+                    color: '#ff8800',
+                    weight: 2,
+                    dashArray: '6, 4',
+                    fillColor: '#ff8800',
+                    fillOpacity: 0.15,
+                    opacity: 0.85
+                }
+            }).addTo(activeBufferLayer);
+
+            // 4. Filtrar quais localidades estão dentro da geometria do buffer
+            const localidadesFeatures = dataPontos.features;
+            let totalSedes = 0, totalVilas = 0, totalRurais = 0;
+
+            localidadesFeatures.forEach(localidade => {
+                if (ufSelecionada !== "all" && localidade.properties.SIGLA_UF !== ufSelecionada) return;
+                if (categoriaSelecionada !== "all" && localidade.properties.CT_LOCALIDADE !== categoriaSelecionada) return;
+
+                // Verificação espacial robusta contra o buffer unificado
+                const estaDentro = turf.booleanPointInPolygon(localidade.geometry, bufferGeoJSON);
+
+                if (estaDentro) {
+                    localidadesAfetadasList.push(localidade);
+
+                    const cat = localidade.properties.CATEGORIA_MAPA;
+                    if (cat === 'Sede') totalSedes++;
+                    else if (cat === 'Vila') totalVilas++;
+                    else if (cat === 'Rural') totalRurais++;
+
+                    // Destaque visual no Leaflet
+                    if (localidade._markerRef) {
+                        localidade._markerRef.setStyle({
+                            radius: 8.5,
+                            color: '#00f2fe',
+                            weight: 3.5,
+                            fillOpacity: 1.0
+                        });
+                    }
+                }
+            });
+
+            // 4.5. Calcular estimativa demográfica baseada nos setores censitários (Censo 2022)
+            totalPopEst = 0;
+            totalDomEst = 0;
+            setoresAfetadosEst = 0;
+            popCapitalEst = 0;
+            popInteriorEst = 0;
+            domCapitalEst = 0;
+            domInteriorEst = 0;
+
+            const CODIGOS_CAPITAIS = ["1302603", "1501402", "1600303", "1400100"];
+
+            const ufsParaCarregar = ufSelecionada === "all" ? ["AM", "AP", "PA", "RR"] : [ufSelecionada];
+            const promessasSetores = ufsParaCarregar.map(async (uf) => {
+                if (!window._setoresCache[uf]) {
+                    try {
+                        const res = await fetch(`setores_censitarios/setores_${uf}_50km.geojson`);
+                        if (res.ok) {
+                            window._setoresCache[uf] = await res.json();
+                        }
+                    } catch (err) {
+                        console.error(`Erro ao carregar setores para análise demográfica da UF: ${uf}`, err);
+                    }
+                }
+            });
+
+            await Promise.all(promessasSetores);
+
+            // Processar cruzamento espacial contra os setores
+            ufsParaCarregar.forEach(uf => {
+                const setoresData = window._setoresCache[uf];
+                if (!setoresData || !setoresData.features) return;
+                
+                setoresData.features.forEach(setor => {
+                    let pontoRepresentativo;
+                    try {
+                        pontoRepresentativo = turf.centroid(setor);
+                    } catch (e) {
+                        const coords = setor.geometry.coordinates;
+                        if (setor.geometry.type === "Polygon") {
+                            pontoRepresentativo = turf.point(coords[0][0]);
+                        } else if (setor.geometry.type === "MultiPolygon") {
+                            pontoRepresentativo = turf.point(coords[0][0][0]);
+                        } else {
+                            return;
+                        }
+                    }
+                    
+                    const estaDentro = turf.booleanPointInPolygon(pontoRepresentativo, bufferGeoJSON);
+                    
+                    if (estaDentro) {
+                        const pop = parseInt(setor.properties.POPULACAO) || 0;
+                        const dom = parseInt(setor.properties.DOMICILIOS) || 0;
+                        const cdMun = setor.properties.CD_MUN;
+                        
+                        if (CODIGOS_CAPITAIS.includes(cdMun)) {
+                            popCapitalEst += pop;
+                            domCapitalEst += dom;
+                        } else {
+                            popInteriorEst += pop;
+                            domInteriorEst += dom;
+                        }
+                        
+                        totalPopEst += pop;
+                        totalDomEst += dom;
+                        setoresAfetadosEst++;
+                    }
+                });
+            });
+
+            console.timeEnd("Processamento Turf.js");
+            console.log(`Análise concluída: ${localidadesAfetadasList.length} comunidades afetadas. Demografia: ${totalPopEst} hab., ${totalDomEst} dom. em ${setoresAfetadosEst} setores.`);
+
+            // 5. Atualizar os cartões e a lista da Sidebar
+            atualizarEstatisticasSidebar(localidadesAfetadasList, raioKm);
+            atualizarListaSidebar(localidadesAfetadasList);
+        }
     }
 
     // Remove o polígono de buffer do mapa

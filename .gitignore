@@ -11,4 +11,5 @@ Desktop.ini
 *.gpkg
 *.geojson
 !setores_censitarios/*.geojson
+!municipios/*.geojson
 

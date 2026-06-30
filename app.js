@@ -13,11 +13,13 @@ window.geoportalLayers = {
     infoviasLayer: null,
     pontosEstrategicosLayer: null,
     heatmapLayer: null,
-    setoresLayer: null
+    setoresLayer: null,
+    municipiosLayer: null
 };
 
 // Cache de dados de setores censitários carregados por UF
 window._setoresCache = {};
+window._municipiosCache = {};
 
 // Gerenciador de Estado Centralizado (Previne loops e sincroniza Sidebar / Floating Menu / Leaflet)
 const GeoportalState = {
@@ -25,7 +27,8 @@ const GeoportalState = {
         camadaPontos: true,
         camadaLinhas: true,
         camadaCalor: false,
-        camadaSetores: false
+        camadaSetores: false,
+        camadaMunicipios: false
     },
     listeners: [],
     
@@ -75,6 +78,14 @@ const GeoportalState = {
             } else {
                 if (window.geoportalLayers.setoresLayer) {
                     map.removeLayer(window.geoportalLayers.setoresLayer);
+                }
+            }
+        } else if (chave === 'camadaMunicipios') {
+            if (valor) {
+                carregarLimitesMunicipais();
+            } else {
+                if (window.geoportalLayers.municipiosLayer) {
+                    map.removeLayer(window.geoportalLayers.municipiosLayer);
                 }
             }
         }
@@ -160,6 +171,10 @@ document.addEventListener("DOMContentLoaded", () => {
             const swSetores = document.getElementById("switch-setores");
             if (swSetores) swSetores.checked = ativa;
         }
+        if (camada === 'camadaMunicipios') {
+            const swMunicipios = document.getElementById("switch-municipios");
+            if (swMunicipios) swMunicipios.checked = ativa;
+        }
     });
 
     // Escutar eventos de cliques na interface para atualizar o Estado
@@ -168,6 +183,8 @@ document.addEventListener("DOMContentLoaded", () => {
     if (swCalor)  swCalor.addEventListener("change",  (e) => GeoportalState.atualizarCamada('camadaCalor',  e.target.checked));
     const swSetores = document.getElementById("switch-setores");
     if (swSetores) swSetores.addEventListener("change", (e) => GeoportalState.atualizarCamada('camadaSetores', e.target.checked));
+    const swMunicipios = document.getElementById("switch-municipios");
+    if (swMunicipios) swMunicipios.addEventListener("change", (e) => GeoportalState.atualizarCamada('camadaMunicipios', e.target.checked));
 
     // Ouvintes para os sub-filtros de distância
     const reexecutarFiltragemDistancia = () => {
@@ -1166,11 +1183,202 @@ async function carregarSetoresCensitarios() {
 // Recarregar setores quando o filtro de UF mudar (se a camada estiver ativa)
 document.addEventListener("DOMContentLoaded", () => {
     const selectUf = document.getElementById("select-uf");
+    const selectMun = document.getElementById("select-municipio");
+    
     if (selectUf) {
-        selectUf.addEventListener("change", () => {
+        selectUf.addEventListener("change", async () => {
+            // Atualizar o dropdown de municipios
+            await atualizarDropdownMunicipios();
+
             if (GeoportalState.state.camadaSetores) {
                 carregarSetoresCensitarios();
+            }
+            if (GeoportalState.state.camadaMunicipios) {
+                carregarLimitesMunicipais();
+            }
+        });
+    }
+
+    if (selectMun) {
+        selectMun.addEventListener("change", () => {
+            const cdMun = selectMun.value;
+            
+            // Enquadrar o mapa no limite do municipio selecionado
+            if (cdMun !== "all" && window.geoportalLayers.municipiosLayer) {
+                window.geoportalLayers.municipiosLayer.eachLayer(layer => {
+                    if (String(layer.feature.properties.CD_MUN) === String(cdMun)) {
+                        window.map.fitBounds(layer.getBounds(), { padding: [50, 50] });
+                        layer.openPopup();
+                    }
+                });
+            }
+            
+            // Disparar analise espacial
+            if (window.executarAnaliseEspacial) {
+                window.executarAnaliseEspacial();
             }
         });
     }
 });
+
+const MUNICIPIOS_FILES = {
+    "AM": "municipios/municipios_AM.geojson",
+    "AP": "municipios/municipios_AP.geojson",
+    "PA": "municipios/municipios_PA.geojson",
+    "RR": "municipios/municipios_RR.geojson"
+};
+
+const MUNICIPIO_STYLE_DEFAULT = {
+    fillColor: "#0284c7",
+    fillOpacity: 0.05,
+    color: "#0284c7",
+    weight: 1.5,
+    opacity: 0.6
+};
+
+/**
+ * Carrega a camada de limites municipais de forma assincrona e lazy.
+ */
+async function carregarLimitesMunicipais() {
+    const map = window.map;
+    if (!map) return;
+
+    const selectUf = document.getElementById("select-uf");
+    const ufSelecionada = selectUf ? selectUf.value : "all";
+
+    if (window.geoportalLayers.municipiosLayer) {
+        map.removeLayer(window.geoportalLayers.municipiosLayer);
+        window.geoportalLayers.municipiosLayer = null;
+    }
+
+    const ufsParaCarregar = ufSelecionada === "all" 
+        ? Object.keys(MUNICIPIOS_FILES) 
+        : [ufSelecionada];
+
+    const ufsValidas = ufsParaCarregar.filter(uf => MUNICIPIOS_FILES[uf]);
+    if (ufsValidas.length === 0) return;
+
+    const allFeatures = [];
+    
+    for (const uf of ufsValidas) {
+        let data = window._municipiosCache[uf];
+        
+        if (!data) {
+            try {
+                const res = await fetch(MUNICIPIOS_FILES[uf]);
+                if (!res.ok) continue;
+                data = await res.json();
+                window._municipiosCache[uf] = data;
+            } catch (err) {
+                console.warn(`Municipios ${uf}: erro ao carregar`, err);
+                continue;
+            }
+        }
+        
+        if (data && data.features) {
+            allFeatures.push(...data.features);
+        }
+    }
+
+    if (allFeatures.length === 0) return;
+
+    const municipiosLayer = L.geoJSON(
+        { type: "FeatureCollection", features: allFeatures },
+        {
+            style: function(feature) {
+                return MUNICIPIO_STYLE_DEFAULT;
+            },
+            onEachFeature: function(feature, layer) {
+                const props = feature.properties || {};
+                
+                const popupContent = `
+                    <div style="min-width: 220px; font-family: 'Inter', sans-serif;">
+                        <h4 style="margin-bottom: 6px; font-size: 12px; color: #0284c7; font-weight: 600;">
+                            Município: ${props.NM_MUN || 'N/A'}
+                        </h4>
+                        <table class="popup-report-table">
+                            <tr><th>UF</th><td>${props.NM_UF || 'N/A'}</td></tr>
+                            <tr><th>Código IBGE</th><td>${props.CD_MUN || 'N/A'}</td></tr>
+                            <tr><th>População Residente</th><td><strong>${props.POPULACAO_REAL ? props.POPULACAO_REAL.toLocaleString('pt-BR') + ' hab.' : 'N/A'}</strong></td></tr>
+                            <tr><th>Total de Domicílios</th><td><strong>${props.DOMICILIOS_REAL ? props.DOMICILIOS_REAL.toLocaleString('pt-BR') + ' res.' : 'N/A'}</strong></td></tr>
+                        </table>
+                    </div>
+                `;
+                layer.bindPopup(popupContent, { maxWidth: 280, autoPan: true });
+
+                layer.on('mouseover', function() {
+                    this.setStyle({ fillOpacity: 0.15, weight: 2.2, color: "#0369a1" });
+                });
+                layer.on('mouseout', function() {
+                    this.setStyle(MUNICIPIO_STYLE_DEFAULT);
+                });
+            }
+        }
+    );
+
+    window.geoportalLayers.municipiosLayer = municipiosLayer;
+    
+    if (GeoportalState.state.camadaMunicipios) {
+        map.addLayer(municipiosLayer);
+    }
+}
+
+/**
+ * Preenche e atualiza o dropdown de municipios com base no estado.
+ */
+async function atualizarDropdownMunicipios() {
+    const selectUf = document.getElementById("select-uf");
+    const selectMun = document.getElementById("select-municipio");
+    if (!selectUf || !selectMun) return;
+
+    const uf = selectUf.value;
+
+    if (uf === "all") {
+        selectMun.innerHTML = '<option value="all">Selecione um Estado primeiro</option>';
+        selectMun.value = "all";
+        selectMun.disabled = true;
+        
+        if (window.executarAnaliseEspacial) {
+            window.executarAnaliseEspacial();
+        }
+        return;
+    }
+
+    const fileUrl = MUNICIPIOS_FILES[uf];
+    if (!fileUrl) return;
+
+    selectMun.disabled = true;
+    selectMun.innerHTML = '<option value="all">Carregando municípios...</option>';
+
+    let data = window._municipiosCache[uf];
+    if (!data) {
+        try {
+            const res = await fetch(fileUrl);
+            if (res.ok) {
+                data = await res.json();
+                window._municipiosCache[uf] = data;
+            }
+        } catch (e) {
+            console.error("Erro ao carregar lista de municipios para dropdown:", e);
+        }
+    }
+
+    if (!data || !data.features) {
+        selectMun.innerHTML = '<option value="all">Erro ao carregar municípios</option>';
+        return;
+    }
+
+    const munList = data.features.map(f => ({
+        cd: f.properties.CD_MUN,
+        nm: f.properties.NM_MUN
+    })).sort((a, b) => a.nm.localeCompare(b.nm));
+
+    let optionsHtml = '<option value="all">Todos os Municípios (Geral)</option>';
+    munList.forEach(m => {
+        optionsHtml += `<option value="${m.cd}">${m.nm}</option>`;
+    });
+
+    selectMun.innerHTML = optionsHtml;
+    selectMun.value = "all";
+    selectMun.disabled = false;
+}

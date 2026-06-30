@@ -104,6 +104,16 @@
                 </label>
             </div>
             <div class="layer-switch">
+                <label for="switch-municipios">
+                    <i class="fa-solid fa-map" style="color: var(--accent-blue);"></i>
+                    Limites Municipais
+                </label>
+                <label class="switch">
+                    <input type="checkbox" id="switch-municipios">
+                    <span class="slider"></span>
+                </label>
+            </div>
+            <div class="layer-switch">
                 <label for="switch-calor">
                     <i class="fa-solid fa-fire" style="color: var(--priority-high);"></i>
                     Mapa de Calor (Densidade)
@@ -195,6 +205,14 @@
                     <option value="PA">Pará (PA)</option>
                     <option value="AP">Amapá (AP)</option>
                     <option value="RR">Roraima (RR)</option>
+                </select>
+            </div>
+            
+            <!-- FILTRO POR MUNICÍPIO (Filtro Territorial) -->
+            <div class="control-group" style="margin-top: 10px;">
+                <label for="select-municipio">Filtrar por Município:</label>
+                <select id="select-municipio" class="custom-select" disabled>
+                    <option value="all">Selecione um Estado primeiro</option>
                 </select>
             </div>
 
