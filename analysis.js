@@ -5,6 +5,11 @@
     let bufferDebounceTimer   = null; // Timer para evitar múltiplos cálculos enquanto arrasta o slider
     let localidadesAfetadasList = []; // Cache das localidades afetadas pelo filtro atual
 
+    // Variáveis demográficas calculadas (Censo 2022)
+    let totalPopEst = 0;
+    let totalDomEst = 0;
+    let setoresAfetadosEst = 0;
+
     // Referências DOM
     const selectInfovia     = document.getElementById("select-infovia");
     const selectUF          = document.getElementById("select-uf");          // MELHORIA 4.2
@@ -21,6 +26,11 @@
     const statVilasPct  = document.getElementById("stat-vilas-pct");       // MELHORIA 4.1
     const statRurais    = document.getElementById("stat-rurais");
     const statRuraisPct = document.getElementById("stat-rurais-pct");      // MELHORIA 4.1
+    
+    // Controles demográficos
+    const statPop       = document.getElementById("stat-populacao");
+    const statDom       = document.getElementById("stat-domicilios");
+    const demoContainer = document.getElementById("demografia-container");
     
     const impactList = document.getElementById("impact-list");
     const btnExport  = document.getElementById("btn-export-csv");
@@ -165,12 +175,12 @@
     }
 
     // Executa o processamento espacial usando Turf.js
-    function executarAnaliseEspacial() {
-        const raioKm           = parseFloat(sliderDistancia.value);
+    async function executarAnaliseEspacial() {
         const infoviaSelecionada = selectInfovia ? selectInfovia.value : "all";
-        const ufSelecionada    = selectUF ? selectUF.value : "all";  // MELHORIA 4.2
-        const categoriaSelecionada = selectCategoriaCt ? selectCategoriaCt.value : "all"; // Filtro de Categoria Censo
-
+        const ufSelecionada = selectUF ? selectUF.value : "all";
+        const categoriaSelecionada = selectCategoriaCt ? selectCategoriaCt.value : "all";
+        const raioKm = sliderDistancia ? parseFloat(sliderDistancia.value) : 0;      
+        
         // Filtrar visualmente as bolinhas no mapa de acordo com o estado e categoria selecionados
         if (window.filtrarLocalidadesNoMapa) {
             window.filtrarLocalidadesNoMapa(ufSelecionada, categoriaSelecionada);
@@ -278,8 +288,73 @@
             }
         });
 
+        // 4.5. Calcular estimativa demográfica (população e domicílios) baseada nos setores censitários (Censo 2022)
+        totalPopEst = 0;
+        totalDomEst = 0;
+        setoresAfetadosEst = 0;
+
+        // Determinar quais UFs carregar com base no filtro
+        const ufsParaCarregar = ufSelecionada === "all" ? ["AM", "AP", "PA", "RR"] : [ufSelecionada];
+        
+        // Assegurar carregamento em segundo plano no cache se ainda não feito (Lazy cache)
+        const promessasSetores = ufsParaCarregar.map(async (uf) => {
+            if (!window._setoresCache[uf]) {
+                try {
+                    const res = await fetch(`setores_censitarios/setores_${uf}_50km.geojson`);
+                    if (res.ok) {
+                        window._setoresCache[uf] = await res.json();
+                    }
+                } catch (err) {
+                    console.error(`Erro ao carregar setores para análise demográfica da UF: ${uf}`, err);
+                }
+            }
+        });
+
+        await Promise.all(promessasSetores);
+
+        // Processar cruzamento espacial contra os setores
+        ufsParaCarregar.forEach(uf => {
+            const setoresData = window._setoresCache[uf];
+            if (!setoresData || !setoresData.features) return;
+            
+            setoresData.features.forEach(setor => {
+                let pontoRepresentativo;
+                try {
+                    pontoRepresentativo = turf.centroid(setor);
+                } catch (e) {
+                    const coords = setor.geometry.coordinates;
+                    if (setor.geometry.type === "Polygon") {
+                        pontoRepresentativo = turf.point(coords[0][0]);
+                    } else if (setor.geometry.type === "MultiPolygon") {
+                        pontoRepresentativo = turf.point(coords[0][0][0]);
+                    } else {
+                        return;
+                    }
+                }
+                
+                let estaDentro = false;
+                if (bufferGeoJSON.type === "FeatureCollection") {
+                    for (let i = 0; i < bufferGeoJSON.features.length; i++) {
+                        const poly = bufferGeoJSON.features[i];
+                        if (poly.geometry && turf.booleanPointInPolygon(pontoRepresentativo, poly)) {
+                            estaDentro = true;
+                            break;
+                        }
+                    }
+                } else {
+                    estaDentro = turf.booleanPointInPolygon(pontoRepresentativo, bufferGeoJSON);
+                }
+                
+                if (estaDentro) {
+                    totalPopEst += parseInt(setor.properties.POPULACAO) || 0;
+                    totalDomEst += parseInt(setor.properties.DOMICILIOS) || 0;
+                    setoresAfetadosEst++;
+                }
+            });
+        });
+
         console.timeEnd("Processamento Turf.js");
-        console.log(`Análise concluída: ${localidadesAfetadasList.length} comunidades afetadas.`);
+        console.log(`Análise concluída: ${localidadesAfetadasList.length} comunidades afetadas. Demografia: ${totalPopEst} hab., ${totalDomEst} dom. em ${setoresAfetadosEst} setores.`);
 
         // 5. Atualizar os cartões e a lista da Sidebar
         atualizarEstatisticasSidebar(localidadesAfetadasList, raioKm);
@@ -319,6 +394,15 @@
         const totalGeral = 11186; // Total fixo de localidades na base
 
         if (statTotal) statTotal.textContent = total.toLocaleString('pt-BR');
+
+        // Atualizar estatísticas demográficas na Sidebar
+        if (totalPopEst > 0 || totalDomEst > 0) {
+            if (statPop) statPop.textContent = totalPopEst.toLocaleString('pt-BR');
+            if (statDom) statDom.textContent = totalDomEst.toLocaleString('pt-BR');
+            if (demoContainer) demoContainer.style.display = "block";
+        } else {
+            if (demoContainer) demoContainer.style.display = "none";
+        }
 
         let totalSedes = 0, totalVilas = 0, totalRurais = 0;
         afetadas.forEach(loc => {
@@ -966,6 +1050,20 @@
             <div class="stat-card rural">
                 <div class="stat-label">Lugares Rurais</div>
                 <div class="stat-val">${totalRurais}</div>
+            </div>
+        </div>
+
+        <!-- ESTIMATIVAS DEMOGRÁFICAS (Melhoria Setores Censitários) -->
+        <div style="margin-top: 16px; margin-bottom: 24px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; page-break-inside: avoid;">
+            <div class="stat-card" style="border-left: 4px solid #b927fc; text-align: left; background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.02); padding: 16px; border: 1px solid var(--border); border-radius: 10px;">
+                <div class="stat-label" style="color: #b927fc; font-weight: 700; font-size: 10px; text-transform: uppercase; margin-bottom: 6px;">População Residente Estimada</div>
+                <div class="stat-val" style="font-size: 22px; font-weight: 700; color: var(--primary);">${totalPopEst.toLocaleString('pt-BR')} <span style="font-size: 11px; font-weight: 500; color: #64748b; text-transform: none;">habitantes (Censo 2022)</span></div>
+                <div style="font-size: 10px; color: #64748b; margin-top: 6px; line-height: 1.4;">Soma populacional de todos os setores censitários interceptados pela área de influência ativa.</div>
+            </div>
+            <div class="stat-card" style="border-left: 4px solid var(--accent-cyan); text-align: left; background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.02); padding: 16px; border: 1px solid var(--border); border-radius: 10px;">
+                <div class="stat-label" style="color: var(--accent-cyan); font-weight: 700; font-size: 10px; text-transform: uppercase; margin-bottom: 6px;">Total de Domicílios</div>
+                <div class="stat-val" style="font-size: 22px; font-weight: 700; color: var(--primary);">${totalDomEst.toLocaleString('pt-BR')} <span style="font-size: 11px; font-weight: 500; color: #64748b; text-transform: none;">residências (Censo 2022)</span></div>
+                <div style="font-size: 10px; color: #64748b; margin-top: 6px; line-height: 1.4;">Quantidade de domicílios nos setores censitários intersectados (${setoresAfetadosEst} setores afetados).</div>
             </div>
         </div>
 

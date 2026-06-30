@@ -289,6 +289,23 @@
                 </div>
             </div>
 
+            <!-- Seção 2.5: Impacto Demográfico dos Setores (Censo 2022) -->
+            <div id="demografia-container" class="chart-container" style="margin-top: 15px; display: none;">
+                <div class="chart-title"><i class="fa-solid fa-users" style="color: #b927fc;"></i> Estimativa Demográfica (Censo 2022)</div>
+                <div class="stats-container" style="grid-template-columns: 1fr 1fr; gap: 8px;">
+                    <div class="stat-card" style="border-left: 3px solid #b927fc; text-align: left;" title="População Residente Estimada nos Setores Censitários">
+                        <span class="label" style="font-size: 9px; text-align: left; padding-left: 2px;">População Est.</span>
+                        <span id="stat-populacao" class="value" style="font-size: 15px; text-align: left; padding-left: 2px; color: #b927fc;">0</span>
+                        <span class="stat-pct" style="font-size: 8px; text-align: left; padding-left: 2px;">habitantes</span>
+                    </div>
+                    <div class="stat-card" style="border-left: 3px solid var(--accent-cyan); text-align: left;" title="Total de Domicílios nos Setores Censitários">
+                        <span class="label" style="font-size: 9px; text-align: left; padding-left: 2px;">Domicílios Est.</span>
+                        <span id="stat-domicilios" class="value" style="font-size: 15px; text-align: left; padding-left: 2px; color: #00d2ff;">0</span>
+                        <span class="stat-pct" style="font-size: 8px; text-align: left; padding-left: 2px;">residências</span>
+                    </div>
+                </div>
+            </div>
+
             <!-- DETALHAMENTO DE CATEGORIAS DO CENSO (CT) COLAPSÁVEL -->
             <div id="ct-breakdown-container" class="ct-breakdown-container" style="display: none;">
                 <button id="btn-toggle-ct-breakdown" class="toggle-ct-btn" title="Expandir/Recolher detalhamento de categorias do censo">
@@ -349,8 +366,8 @@
     <script src="https://unpkg.com/@turf/turf@6.5.0/turf.min.js"></script>
 
     <!-- Scripts da Aplicação (Organizados por Responsabilidade) -->
-    <script src="app.js?v=3.0.0"></script>
-    <script src="measure.js?v=3.0.0"></script>
-    <script src="analysis.js?v=3.0.0"></script>
+    <script src="app.js?v=3.1.0"></script>
+    <script src="measure.js?v=3.1.0"></script>
+    <script src="analysis.js?v=3.1.0"></script>
 </body>
 </html>
