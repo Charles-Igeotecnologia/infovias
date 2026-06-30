@@ -79,6 +79,15 @@
         if (selectCategoriaCt) {
             selectCategoriaCt.addEventListener("change", executarAnaliseEspacial);
         }
+        // Filtro territorial por limites municipais reexecuta análise
+        const selectMunicipio = document.getElementById("select-municipio");
+        if (selectMunicipio) {
+            selectMunicipio.addEventListener("change", executarAnaliseEspacial);
+        }
+
+        // Expor a função de análise globalmente para sincronização com app.js
+        window.executarAnaliseEspacial = executarAnaliseEspacial;
+
         if (btnReset) {
             btnReset.addEventListener("click", resetarFiltros);
         }
