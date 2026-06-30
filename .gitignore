@@ -10,4 +10,5 @@ Desktop.ini
 # Data files
 *.gpkg
 *.geojson
+!setores_censitarios/*.geojson
 
