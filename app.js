@@ -812,7 +812,7 @@ function adicionarLegendaAoMapa() {
                         Infovia Planejada
                     </div>
                     <div class="legend-item">
-                        <span class="legend-color" style="background: linear-gradient(135deg, #ff007f, #ff5e62); border: 1.5px solid #fff; border-radius: 0; transform: rotate(45deg); width: 8px; height: 8px; margin-left: 2px; margin-right: 6px; box-shadow: 0 0 4px rgba(255, 0, 127, 0.6);"></span>
+                        <span class="legend-color" style="background: linear-gradient(135deg, #ff007f, #ff5e62); border: 1.5px solid #fff; border-radius: 50%; width: 8px; height: 8px; margin-left: 2px; margin-right: 6px; box-shadow: 0 0 4px rgba(255, 0, 127, 0.6);"></span>
                         Nó de Infraestrutura (Ponto da Infovia)
                     </div>
                 </div>

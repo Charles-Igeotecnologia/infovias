@@ -1161,21 +1161,20 @@ input:checked + .slider:before {
     overflow: visible !important;
 }
 
-/* O corpo principal do ponto estratégico - Losango/Diamante pulsante */
+/* O corpo principal do ponto estratégico - Círculo pulsante */
 .ponto-estrategico-marker {
     width: 12px;
     height: 12px;
     background: linear-gradient(135deg, #ff007f, #ff5e62) !important;
     border: 2px solid #ffffff !important;
-    border-radius: 0 !important;
-    transform: rotate(45deg);
+    border-radius: 50% !important;
     box-shadow: 0 0 10px rgba(255, 0, 127, 0.8), 0 0 4px rgba(0,0,0,0.5);
     position: relative;
     cursor: pointer;
     transition: var(--transition-smooth);
 }
 
-/* Efeito de onda pulsante (sonar ripple) ao redor do diamante */
+/* Efeito de onda pulsante (sonar ripple) ao redor do círculo */
 .ponto-estrategico-marker::after {
     content: '';
     position: absolute;
@@ -1184,14 +1183,14 @@ input:checked + .slider:before {
     right: -4px;
     bottom: -4px;
     border: 1.5px solid #ff007f;
-    border-radius: 0;
+    border-radius: 50% !important;
     opacity: 0;
     animation: sonar-pulse 1.8s infinite ease-out;
     pointer-events: none;
 }
 
 .ponto-estrategico-marker:hover {
-    transform: rotate(45deg) scale(1.35) !important;
+    transform: scale(1.35) !important;
     filter: brightness(1.2);
 }
 
