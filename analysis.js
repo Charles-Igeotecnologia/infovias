@@ -778,7 +778,7 @@
             return a.properties.NM_LOCALIDADE.localeCompare(b.properties.NM_LOCALIDADE);
         });
 
-        // Gerar linhas da tabela (com coluna de distância)
+        // Gerar linhas da tabela (com coluna de distância, população e domicílios)
         let tabelaLinhasHtml = "";
         afetadasOrdenadas.forEach((loc, index) => {
             const props = loc.properties;
@@ -787,6 +787,29 @@
             const distSedeText = (props.DIST_MUNICIPIO !== undefined && props.DIST_MUNICIPIO !== null)
                 ? (props.DIST_MUNICIPIO === 0 ? "Sede" : `${props.DIST_MUNICIPIO.toFixed(1)} km`)
                 : "N/A";
+            
+            // Buscar população e domicílios do setor censitário que contém a comunidade
+            let popLoc = 0;
+            let domLoc = 0;
+            let temSetor = false;
+            
+            const ufLoc = props.SIGLA_UF;
+            const setoresData = window._setoresCache ? window._setoresCache[ufLoc] : null;
+            if (setoresData && setoresData.features) {
+                const pontoLoc = turf.point(coords);
+                for (let j = 0; j < setoresData.features.length; j++) {
+                    const setor = setoresData.features[j];
+                    if (setor.geometry && turf.booleanPointInPolygon(pontoLoc, setor)) {
+                        popLoc = parseInt(setor.properties.POPULACAO) || 0;
+                        domLoc = parseInt(setor.properties.DOMICILIOS) || 0;
+                        temSetor = true;
+                        break;
+                    }
+                }
+            }
+            
+            const popText = temSetor ? popLoc.toLocaleString('pt-BR') : "N/A";
+            const domText = temSetor ? domLoc.toLocaleString('pt-BR') : "N/A";
             
             tabelaLinhasHtml += `
                 <tr>
@@ -797,6 +820,8 @@
                     <td style="text-align: center;">
                         <span class="prio-tag ${props.CATEGORIA_MAPA.toLowerCase()}">${rotuloCat}</span>
                     </td>
+                    <td style="text-align: center; font-weight: 500;">${popText}</td>
+                    <td style="text-align: center; font-weight: 500;">${domText}</td>
                     <td style="text-align: center; font-weight: 500; font-size: 12px; color: ${props.DIST_MUNICIPIO === 0 ? 'var(--accent-cyan)' : '#334155'};">
                         ${distSedeText}
                     </td>
@@ -1116,9 +1141,11 @@
                         <th>Nome da Comunidade</th>
                         <th>Município / UF</th>
                         <th>Categoria (Censo)</th>
-                        <th style="width: 150px; text-align: center;">Classificação</th>
-                        <th style="width: 120px; text-align: center;">Dist. Sede</th>
-                        <th style="width: 180px; text-align: center;">Coordenadas (Lat, Lng)</th>
+                        <th style="width: 140px; text-align: center;">Classificação</th>
+                        <th style="width: 110px; text-align: center;">População (Setor)</th>
+                        <th style="width: 110px; text-align: center;">Domicílios (Setor)</th>
+                        <th style="width: 100px; text-align: center;">Dist. Sede</th>
+                        <th style="width: 170px; text-align: center;">Coordenadas (Lat, Lng)</th>
                     </tr>
                 </thead>
                 <tbody>
