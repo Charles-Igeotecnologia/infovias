@@ -458,8 +458,6 @@ function configurarInfovias(geojson) {
                         <tr><th>Infovia</th><td>${props.KML_FOLDER || 'N/A'}</td></tr>
                         <tr><th>Segmento</th><td>${props.NAME || 'N/A'}</td></tr>
                         <tr><th>Tipo</th><td>${props.TIPO || 'N/A'}</td></tr>
-                        <tr><th>Estilo KML</th><td>${props.KML_STYLE || 'N/A'}</td></tr>
-                        <tr><th>Tessellate</th><td>${props.tessellate !== undefined ? props.tessellate : 'N/A'}</td></tr>
                         <tr><th>Rota/Dist.</th><td>${props.ROTA_DISTANCIA || 'N/A'}</td></tr>
                     </table>
                     <a href="${mapsUrl}" target="_blank" class="popup-maps-link">
