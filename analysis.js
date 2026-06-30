@@ -479,10 +479,14 @@
             const badgeClass  = props.CATEGORIA_MAPA.toLowerCase();
             const rotuloCat   = props.CATEGORIA_MAPA === 'Sede' ? 'Sede Municipal' : (props.CATEGORIA_MAPA === 'Vila' ? 'Vila' : 'Lugar Rural');
             
+            const distSedeText = (props.DIST_MUNICIPIO !== undefined && props.DIST_MUNICIPIO !== null && props.DIST_MUNICIPIO > 0)
+                ? ` • <span style="color: var(--accent-cyan); font-weight: 500;">${props.DIST_MUNICIPIO.toFixed(1)} km da Sede</span>`
+                : (props.CATEGORIA_MAPA === 'Sede' ? ' • <span style="color: var(--priority-medium); font-weight: 600;">Sede</span>' : '');
+
             itemDiv.innerHTML = `
                 <div>
                     <div class="name-uf" title="${props.NM_LOCALIDADE}">${props.NM_LOCALIDADE} (${props.SIGLA_UF})</div>
-                    <div class="mun">${props.NM_MUN || 'Município não cadastrado'}</div>
+                    <div class="mun">${props.NM_MUN || 'Município não cadastrado'}${distSedeText}</div>
                 </div>
                 <span class="prio-badge ${badgeClass}">${rotuloCat}</span>
             `;
@@ -597,8 +601,8 @@
 
         console.log("Iniciando exportação de CSV...");
         
-        // Cabeçalho do CSV
-        let csvContent = "Nome_Localidade;Estado_UF;Municipio;Categoria_Censo;Classificacao_Mapa;Latitude;Longitude\n";
+        // Cabeçalho do CSV (com a nova coluna de distância)
+        let csvContent = "Nome_Localidade;Estado_UF;Municipio;Categoria_Censo;Classificacao_Mapa;Distancia_Sede_KM;Latitude;Longitude\n";
         
         // Corpo do CSV
         localidadesAfetadasList.forEach(loc => {
@@ -611,10 +615,11 @@
             const mun       = (props.NM_MUN  || "").replace(/;/g, ",").replace(/"/g, '""');
             const cat       = props.CT_LOCALIDADE || "";
             const classeMapa = props.CATEGORIA_MAPA === 'Sede' ? 'Sede Municipal' : (props.CATEGORIA_MAPA === 'Vila' ? 'Vila' : 'Lugar Rural');
+            const distSede   = props.DIST_MUNICIPIO !== undefined && props.DIST_MUNICIPIO !== null ? props.DIST_MUNICIPIO : "";
             const lat       = coords[1].toFixed(6);
             const lng       = coords[0].toFixed(6);
             
-            csvContent += `"${nome}";"${uf}";"${mun}";"${cat}";"${classeMapa}";${lat};${lng}\n`;
+            csvContent += `"${nome}";"${uf}";"${mun}";"${cat}";"${classeMapa}";${distSede};${lat};${lng}\n`;
         });
 
         // Gerar o Blob e forçar download
@@ -666,12 +671,15 @@
             return a.properties.NM_LOCALIDADE.localeCompare(b.properties.NM_LOCALIDADE);
         });
 
-        // Gerar linhas da tabela
+        // Gerar linhas da tabela (com coluna de distância)
         let tabelaLinhasHtml = "";
         afetadasOrdenadas.forEach((loc, index) => {
             const props = loc.properties;
             const coords = loc.geometry.coordinates; // [lng, lat]
             const rotuloCat = props.CATEGORIA_MAPA === 'Sede' ? 'Sede Municipal' : (props.CATEGORIA_MAPA === 'Vila' ? 'Vila' : 'Lugar Rural');
+            const distSedeText = (props.DIST_MUNICIPIO !== undefined && props.DIST_MUNICIPIO !== null)
+                ? (props.DIST_MUNICIPIO === 0 ? "Sede" : `${props.DIST_MUNICIPIO.toFixed(1)} km`)
+                : "N/A";
             
             tabelaLinhasHtml += `
                 <tr>
@@ -681,6 +689,9 @@
                     <td>${props.CT_LOCALIDADE || 'N/A'}</td>
                     <td style="text-align: center;">
                         <span class="prio-tag ${props.CATEGORIA_MAPA.toLowerCase()}">${rotuloCat}</span>
+                    </td>
+                    <td style="text-align: center; font-weight: 500; font-size: 12px; color: ${props.DIST_MUNICIPIO === 0 ? 'var(--accent-cyan)' : '#334155'};">
+                        ${distSedeText}
                     </td>
                     <td style="font-family: monospace; font-size: 11px; text-align: center;">
                         ${coords[1].toFixed(6)}, ${coords[0].toFixed(6)}
@@ -979,6 +990,7 @@
                         <th>Município / UF</th>
                         <th>Categoria (Censo)</th>
                         <th style="width: 150px; text-align: center;">Classificação</th>
+                        <th style="width: 120px; text-align: center;">Dist. Sede</th>
                         <th style="width: 180px; text-align: center;">Coordenadas (Lat, Lng)</th>
                     </tr>
                 </thead>
