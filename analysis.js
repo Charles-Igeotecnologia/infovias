@@ -281,9 +281,16 @@
 
             const CODIGOS_CAPITAIS = ["1302603", "1501402", "1600303", "1400100"];
             if (CODIGOS_CAPITAIS.includes(String(cdMunSelecionado))) {
-                popCapitalEst = totalPopEst;
-                domCapitalEst = totalDomEst;
+                // Se for capital: a população e os domicílios urbanos reais são classificados como Capital,
+                // enquanto os rurais são classificados como Interior!
+                popCapitalEst = munFeature.properties.POP_URBANA_REAL || 0;
+                domCapitalEst = munFeature.properties.DOM_URBANO_REAL || 0;
+                popInteriorEst = munFeature.properties.POP_RURAL_REAL || 0;
+                domInteriorEst = munFeature.properties.DOM_RURAL_REAL || 0;
             } else {
+                // Se for município do interior: 100% da demografia vai para Interior!
+                popCapitalEst = 0;
+                domCapitalEst = 0;
                 popInteriorEst = totalPopEst;
                 domInteriorEst = totalDomEst;
             }
@@ -305,21 +312,33 @@
             todasLocalidades.forEach(localidade => {
                 if (String(localidade.properties.CD_MUN) === String(cdMunSelecionado)) {
                     if (categoriaSelecionada === "all" || localidade.properties.CT_LOCALIDADE === categoriaSelecionada) {
-                        localidadesAfetadasList.push(localidade);
+                        
+                        // Deduplicação por Nome e Coordenadas Geográficas
+                        const coords = localidade.geometry.coordinates;
+                        const nome = localidade.properties.NM_LOCALIDADE;
+                        const jaExiste = localidadesAfetadasList.some(item => 
+                            item.properties.NM_LOCALIDADE === nome && 
+                            Math.abs(item.geometry.coordinates[0] - coords[0]) < 0.0001 && 
+                            Math.abs(item.geometry.coordinates[1] - coords[1]) < 0.0001
+                        );
+                        
+                        if (!jaExiste) {
+                            localidadesAfetadasList.push(localidade);
 
-                        const cat = localidade.properties.CATEGORIA_MAPA;
-                        if (cat === 'Sede') totalSedes++;
-                        else if (cat === 'Vila') totalVilas++;
-                        else if (cat === 'Rural') totalRurais++;
+                            const cat = localidade.properties.CATEGORIA_MAPA;
+                            if (cat === 'Sede') totalSedes++;
+                            else if (cat === 'Vila') totalVilas++;
+                            else if (cat === 'Rural') totalRurais++;
 
-                        // Destaque visual no Leaflet
-                        if (localidade._markerRef) {
-                            localidade._markerRef.setStyle({
-                                radius: 8.5,
-                                color: '#00f2fe',
-                                weight: 3.5,
-                                fillOpacity: 1.0
-                            });
+                            // Destaque visual no Leaflet
+                            if (localidade._markerRef) {
+                                localidade._markerRef.setStyle({
+                                    radius: 8.5,
+                                    color: '#00f2fe',
+                                    weight: 3.5,
+                                    fillOpacity: 1.0
+                                });
+                            }
                         }
                     }
                 }
@@ -427,21 +446,32 @@
                 const estaDentro = turf.booleanPointInPolygon(localidade.geometry, bufferGeoJSON);
 
                 if (estaDentro) {
-                    localidadesAfetadasList.push(localidade);
+                    // Deduplicação por Nome e Coordenadas Geográficas
+                    const coords = localidade.geometry.coordinates;
+                    const nome = localidade.properties.NM_LOCALIDADE;
+                    const jaExiste = localidadesAfetadasList.some(item => 
+                        item.properties.NM_LOCALIDADE === nome && 
+                        Math.abs(item.geometry.coordinates[0] - coords[0]) < 0.0001 && 
+                        Math.abs(item.geometry.coordinates[1] - coords[1]) < 0.0001
+                    );
+                    
+                    if (!jaExiste) {
+                        localidadesAfetadasList.push(localidade);
 
-                    const cat = localidade.properties.CATEGORIA_MAPA;
-                    if (cat === 'Sede') totalSedes++;
-                    else if (cat === 'Vila') totalVilas++;
-                    else if (cat === 'Rural') totalRurais++;
+                        const cat = localidade.properties.CATEGORIA_MAPA;
+                        if (cat === 'Sede') totalSedes++;
+                        else if (cat === 'Vila') totalVilas++;
+                        else if (cat === 'Rural') totalRurais++;
 
-                    // Destaque visual no Leaflet
-                    if (localidade._markerRef) {
-                        localidade._markerRef.setStyle({
-                            radius: 8.5,
-                            color: '#00f2fe',
-                            weight: 3.5,
-                            fillOpacity: 1.0
-                        });
+                        // Destaque visual no Leaflet
+                        if (localidade._markerRef) {
+                            localidade._markerRef.setStyle({
+                                radius: 8.5,
+                                color: '#00f2fe',
+                                weight: 3.5,
+                                fillOpacity: 1.0
+                            });
+                        }
                     }
                 }
             });
