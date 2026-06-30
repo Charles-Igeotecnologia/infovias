@@ -9,6 +9,10 @@
     let totalPopEst = 0;
     let totalDomEst = 0;
     let setoresAfetadosEst = 0;
+    let popCapitalEst = 0;
+    let popInteriorEst = 0;
+    let domCapitalEst = 0;
+    let domInteriorEst = 0;
 
     // Referências DOM
     const selectInfovia     = document.getElementById("select-infovia");
@@ -29,7 +33,9 @@
     
     // Controles demográficos
     const statPop       = document.getElementById("stat-populacao");
+    const statPopSub    = document.getElementById("stat-populacao-sub");
     const statDom       = document.getElementById("stat-domicilios");
+    const statDomSub    = document.getElementById("stat-domicilios-sub");
     const demoContainer = document.getElementById("demografia-container");
     
     const impactList = document.getElementById("impact-list");
@@ -285,6 +291,12 @@
         totalPopEst = 0;
         totalDomEst = 0;
         setoresAfetadosEst = 0;
+        popCapitalEst = 0;
+        popInteriorEst = 0;
+        domCapitalEst = 0;
+        domInteriorEst = 0;
+
+        const CODIGOS_CAPITAIS = ["1302603", "1501402", "1600303", "1400100"]; // Manaus, Belém, Macapá, Boa Vista
 
         // Determinar quais UFs carregar com base no filtro
         const ufsParaCarregar = ufSelecionada === "all" ? ["AM", "AP", "PA", "RR"] : [ufSelecionada];
@@ -329,8 +341,20 @@
                 const estaDentro = turf.booleanPointInPolygon(pontoRepresentativo, bufferGeoJSON);
                 
                 if (estaDentro) {
-                    totalPopEst += parseInt(setor.properties.POPULACAO) || 0;
-                    totalDomEst += parseInt(setor.properties.DOMICILIOS) || 0;
+                    const pop = parseInt(setor.properties.POPULACAO) || 0;
+                    const dom = parseInt(setor.properties.DOMICILIOS) || 0;
+                    const cdMun = setor.properties.CD_MUN;
+                    
+                    if (CODIGOS_CAPITAIS.includes(cdMun)) {
+                        popCapitalEst += pop;
+                        domCapitalEst += dom;
+                    } else {
+                        popInteriorEst += pop;
+                        domInteriorEst += dom;
+                    }
+                    
+                    totalPopEst += pop;
+                    totalDomEst += dom;
                     setoresAfetadosEst++;
                 }
             });
@@ -378,10 +402,18 @@
 
         if (statTotal) statTotal.textContent = total.toLocaleString('pt-BR');
 
-        // Atualizar estatísticas demográficas na Sidebar
+        // Atualizar estatísticas demográficas na Sidebar com desdobramento Capital/Interior
         if (totalPopEst > 0 || totalDomEst > 0) {
             if (statPop) statPop.textContent = totalPopEst.toLocaleString('pt-BR');
+            if (statPopSub) {
+                statPopSub.innerHTML = `Interior: <strong>${popInteriorEst.toLocaleString('pt-BR')}</strong><br>Capitais: ${popCapitalEst.toLocaleString('pt-BR')}`;
+            }
+            
             if (statDom) statDom.textContent = totalDomEst.toLocaleString('pt-BR');
+            if (statDomSub) {
+                statDomSub.innerHTML = `Interior: <strong>${domInteriorEst.toLocaleString('pt-BR')}</strong><br>Capitais: ${domCapitalEst.toLocaleString('pt-BR')}`;
+            }
+            
             if (demoContainer) demoContainer.style.display = "block";
         } else {
             if (demoContainer) demoContainer.style.display = "none";
@@ -1040,13 +1072,19 @@
         <div style="margin-top: 16px; margin-bottom: 24px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; page-break-inside: avoid;">
             <div class="stat-card" style="border-left: 4px solid #b927fc; text-align: left; background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.02); padding: 16px; border: 1px solid var(--border); border-radius: 10px;">
                 <div class="stat-label" style="color: #b927fc; font-weight: 700; font-size: 10px; text-transform: uppercase; margin-bottom: 6px;">População Residente Estimada</div>
-                <div class="stat-val" style="font-size: 22px; font-weight: 700; color: var(--primary);">${totalPopEst.toLocaleString('pt-BR')} <span style="font-size: 11px; font-weight: 500; color: #64748b; text-transform: none;">habitantes (Censo 2022)</span></div>
-                <div style="font-size: 10px; color: #64748b; margin-top: 6px; line-height: 1.4;">Soma populacional de todos os setores censitários interceptados pela área de influência ativa.</div>
+                <div class="stat-val" style="font-size: 20px; font-weight: 700; color: var(--primary); margin-bottom: 4px;">${totalPopEst.toLocaleString('pt-BR')} <span style="font-size: 11px; font-weight: 500; color: #64748b; text-transform: none;">habitantes (Censo 2022)</span></div>
+                <div style="font-size: 11px; color: #334155; margin-bottom: 6px;">
+                    Interior: <strong>${popInteriorEst.toLocaleString('pt-BR')} hab.</strong> | Capitais: ${popCapitalEst.toLocaleString('pt-BR')} hab.
+                </div>
+                <div style="font-size: 9px; color: #64748b; line-height: 1.4;">Soma populacional de todos os setores censitários interceptados pela área de influência ativa.</div>
             </div>
             <div class="stat-card" style="border-left: 4px solid var(--accent-cyan); text-align: left; background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.02); padding: 16px; border: 1px solid var(--border); border-radius: 10px;">
                 <div class="stat-label" style="color: var(--accent-cyan); font-weight: 700; font-size: 10px; text-transform: uppercase; margin-bottom: 6px;">Total de Domicílios</div>
-                <div class="stat-val" style="font-size: 22px; font-weight: 700; color: var(--primary);">${totalDomEst.toLocaleString('pt-BR')} <span style="font-size: 11px; font-weight: 500; color: #64748b; text-transform: none;">residências (Censo 2022)</span></div>
-                <div style="font-size: 10px; color: #64748b; margin-top: 6px; line-height: 1.4;">Quantidade de domicílios nos setores censitários intersectados (${setoresAfetadosEst} setores afetados).</div>
+                <div class="stat-val" style="font-size: 20px; font-weight: 700; color: var(--primary); margin-bottom: 4px;">${totalDomEst.toLocaleString('pt-BR')} <span style="font-size: 11px; font-weight: 500; color: #64748b; text-transform: none;">residências (Censo 2022)</span></div>
+                <div style="font-size: 11px; color: #334155; margin-bottom: 6px;">
+                    Interior: <strong>${domInteriorEst.toLocaleString('pt-BR')} res.</strong> | Capitais: ${domCapitalEst.toLocaleString('pt-BR')} res.
+                </div>
+                <div style="font-size: 9px; color: #64748b; line-height: 1.4;">Quantidade de domicílios nos setores censitários intersectados (${setoresAfetadosEst} setores afetados).</div>
             </div>
         </div>
 
