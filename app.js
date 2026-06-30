@@ -1134,6 +1134,8 @@ async function carregarSetoresCensitarios() {
                             <tr><th>UF</th><td>${props.NM_UF || 'N/A'}</td></tr>
                             <tr><th>Situação</th><td><strong>${situacao}</strong></td></tr>
                             <tr><th>Área (km²)</th><td>${props.AREA_KM2 ? props.AREA_KM2.toFixed(2) : 'N/A'}</td></tr>
+                            <tr><th>População</th><td><strong>${props.POPULACAO !== undefined ? props.POPULACAO.toLocaleString('pt-BR') + ' hab.' : 'N/A'}</strong></td></tr>
+                            <tr><th>Domicílios</th><td><strong>${props.DOMICILIOS !== undefined ? props.DOMICILIOS.toLocaleString('pt-BR') + ' res.' : 'N/A'}</strong></td></tr>
                             <tr><th>Distrito</th><td>${props.NM_DIST || 'N/A'}</td></tr>
                             <tr><th>Bairro</th><td>${props.NM_BAIRRO || 'N/A'}</td></tr>
                             <tr><th>Dist. Infovia</th><td><strong>${props.DIST_INFOVIA ? props.DIST_INFOVIA.toFixed(1) + ' km' : 'N/A'}</strong></td></tr>
