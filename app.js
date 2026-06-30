@@ -448,7 +448,20 @@ function configurarInfovias(geojson) {
 
 // 5.2 Estilização dos Pontos Estratégicos de Infraestrutura (Nós de Conexão das Infovias)
 function configurarPontosEstrategicos(geojson) {
-    // Função para criar o DivIcon para os nós estratégicos em formato de losango pulsante
+    // Função interna para calcular a distância Haversine
+    function calcularHaversine(lon1, lat1, lon2, lat2) {
+        const toRad = deg => deg * Math.PI / 180;
+        const R = 6371; // km
+        const dLat = toRad(lat2 - lat1);
+        const dLon = toRad(lon2 - lon1);
+        const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                  Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+                  Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return R * c;
+    }
+
+    // Função para criar o DivIcon para os nós estratégicos em formato de círculo pulsante
     function criarIconeEstrategico() {
         const html = `<div class="ponto-estrategico-marker"></div>`;
         return L.divIcon({
@@ -471,22 +484,51 @@ function configurarPontosEstrategicos(geojson) {
             const latlng  = layer.getLatLng();
             const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${latlng.lat},${latlng.lng}`;
 
-            const popupContent = `
-                <div style="min-width: 240px; font-family: 'Inter', sans-serif;">
-                    <h4 style="margin-bottom: 8px; font-size: 13px; color: var(--accent-cyan); font-weight: 600;">Relatório de Conexão</h4>
-                    <table class="popup-report-table">
-                        <tr><th>Nome do Ponto</th><td>${props.NAME || 'N/A'}</td></tr>
-                        <tr><th>Infovia Relacionada</th><td>${props.KML_FOLDER || 'N/A'}</td></tr>
-                        <tr><th>Estilo KML</th><td>${props.KML_STYLE || 'N/A'}</td></tr>
-                        <tr><th>Latitude</th><td>${latlng.lat.toFixed(6)}</td></tr>
-                        <tr><th>Longitude</th><td>${latlng.lng.toFixed(6)}</td></tr>
-                    </table>
-                    <a href="${mapsUrl}" target="_blank" class="popup-maps-link">
-                        <i class="fa-solid fa-map-location-dot"></i> Visualizar no Google Maps
-                    </a>
-                </div>
-            `;
-            layer.bindPopup(popupContent);
+            // Configurar popup dinâmico para calcular distância à sede mais próxima
+            layer.bindPopup(function(layerRef) {
+                let distMunHtml = "";
+                if (window.geoportalData && window.geoportalData.localidades) {
+                    const locs = window.geoportalData.localidades.features;
+                    let minSede = null;
+                    let minDist = Infinity;
+                    
+                    locs.forEach(feat => {
+                        const lp = feat.properties;
+                        if (lp.CATEGORIA_MAPA === 'Sede') {
+                            const coords = feat.geometry.coordinates; // [lng, lat]
+                            const dist = calcularHaversine(latlng.lng, latlng.lat, coords[0], coords[1]);
+                            if (dist < minDist) {
+                                minDist = dist;
+                                minSede = lp;
+                            }
+                        }
+                    });
+                    
+                    if (minSede) {
+                        distMunHtml = `
+                            <tr><th>Município (Sede)</th><td>${minSede.NM_MUN || 'N/A'} (${minSede.SIGLA_UF || 'N/A'})</td></tr>
+                            <tr><th>Dist. Sede Municipal</th><td><strong>${minDist.toFixed(1)} km</strong></td></tr>
+                        `;
+                    }
+                }
+
+                return `
+                    <div style="min-width: 260px; font-family: 'Inter', sans-serif;">
+                        <h4 style="margin-bottom: 8px; font-size: 13px; color: var(--accent-cyan); font-weight: 600;">Relatório de Conexão</h4>
+                        <table class="popup-report-table">
+                            <tr><th>Nome do Ponto</th><td>${props.NAME || 'N/A'}</td></tr>
+                            <tr><th>Infovia Relacionada</th><td>${props.KML_FOLDER || 'N/A'}</td></tr>
+                            <tr><th>Estilo KML</th><td>${props.KML_STYLE || 'N/A'}</td></tr>
+                            ${distMunHtml}
+                            <tr><th>Latitude</th><td>${latlng.lat.toFixed(6)}</td></tr>
+                            <tr><th>Longitude</th><td>${latlng.lng.toFixed(6)}</td></tr>
+                        </table>
+                        <a href="${mapsUrl}" target="_blank" class="popup-maps-link">
+                            <i class="fa-solid fa-map-location-dot"></i> Visualizar no Google Maps
+                        </a>
+                    </div>
+                `;
+            }, { maxWidth: 300, autoPan: true });
         }
     });
 
@@ -632,6 +674,7 @@ function configurarLocalidades(geojson) {
                         <tr><th>Cód. Localidade</th><td>${props.CD_LOCALIDADE ? parseInt(props.CD_LOCALIDADE) : 'N/A'}</td></tr>
                         <tr><th>Estado / UF</th><td>${props.NM_UF || 'N/A'} (${props.SIGLA_UF || 'N/A'}) (Cód: ${props.CD_UF || 'N/A'})</td></tr>
                         <tr><th>Município</th><td>${props.NM_MUN || 'N/A'} (Cód: ${props.CD_MUN || 'N/A'})</td></tr>
+                        <tr><th>Dist. Sede Municipal</th><td>${(props.DIST_MUNICIPIO !== undefined && props.DIST_MUNICIPIO !== null) ? (props.DIST_MUNICIPIO === 0 ? '<strong>Sede do Município</strong>' : `<strong>${props.DIST_MUNICIPIO.toFixed(1)} km</strong>`) : 'N/A'}</td></tr>
                         <tr><th>Classificação</th><td><strong>${rotuloCat}</strong></td></tr>
                         <tr><th>Categoria Censo</th><td>${props.CT_LOCALIDADE || 'N/A'}</td></tr>
                         <tr><th>Subcategoria</th><td>${props.SCT_LOCALIDADE || 'N/A'}</td></tr>
