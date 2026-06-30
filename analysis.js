@@ -788,28 +788,56 @@
                 ? (props.DIST_MUNICIPIO === 0 ? "Sede" : `${props.DIST_MUNICIPIO.toFixed(1)} km`)
                 : "N/A";
             
-            // Buscar população e domicílios do setor censitário que contém a comunidade
+            // Buscar população e domicílios (Consolidado urbano para Sedes, Setor pontual para outras)
             let popLoc = 0;
             let domLoc = 0;
-            let temSetor = false;
+            let temDados = false;
+            let ehNucleoUrbano = false;
             
             const ufLoc = props.SIGLA_UF;
             const setoresData = window._setoresCache ? window._setoresCache[ufLoc] : null;
+            
             if (setoresData && setoresData.features) {
-                const pontoLoc = turf.point(coords);
-                for (let j = 0; j < setoresData.features.length; j++) {
-                    const setor = setoresData.features[j];
-                    if (setor.geometry && turf.booleanPointInPolygon(pontoLoc, setor)) {
-                        popLoc = parseInt(setor.properties.POPULACAO) || 0;
-                        domLoc = parseInt(setor.properties.DOMICILIOS) || 0;
-                        temSetor = true;
-                        break;
+                if (props.CATEGORIA_MAPA === 'Sede') {
+                    // Sede Municipal -> Somar todos os setores urbanos daquele município
+                    const cdMunTarget = String(props.CD_MUN);
+                    setoresData.features.forEach(setor => {
+                        const cdMunSetor = String(setor.properties.CD_MUN);
+                        const sitSetor = setor.properties.SITUACAO;
+                        if (cdMunSetor === cdMunTarget && sitSetor === "Urbana") {
+                            popLoc += parseInt(setor.properties.POPULACAO) || 0;
+                            domLoc += parseInt(setor.properties.DOMICILIOS) || 0;
+                            temDados = true;
+                            ehNucleoUrbano = true;
+                        }
+                    });
+                } else {
+                    // Vila ou Lugar Rural -> Pertencimento geométrico ponto-em-polígono
+                    const pontoLoc = turf.point(coords);
+                    for (let j = 0; j < setoresData.features.length; j++) {
+                        const setor = setoresData.features[j];
+                        if (setor.geometry && turf.booleanPointInPolygon(pontoLoc, setor)) {
+                            popLoc = parseInt(setor.properties.POPULACAO) || 0;
+                            domLoc = parseInt(setor.properties.DOMICILIOS) || 0;
+                            temDados = true;
+                            break;
+                        }
                     }
                 }
             }
             
-            const popText = temSetor ? popLoc.toLocaleString('pt-BR') : "N/A";
-            const domText = temSetor ? domLoc.toLocaleString('pt-BR') : "N/A";
+            // Formatar os textos com indicação visual para sedes
+            let popText = "N/A";
+            let domText = "N/A";
+            
+            if (temDados) {
+                popText = popLoc.toLocaleString('pt-BR');
+                domText = domLoc.toLocaleString('pt-BR');
+                if (ehNucleoUrbano) {
+                    popText += ` <span style="font-size: 10px; color: #b927fc; font-weight: bold;" title="Total consolidado do Núcleo Urbano da cidade">*</span>`;
+                    domText += ` <span style="font-size: 10px; color: var(--accent-cyan); font-weight: bold;" title="Total consolidado do Núcleo Urbano da cidade">*</span>`;
+                }
+            }
             
             tabelaLinhasHtml += `
                 <tr>
@@ -1152,6 +1180,10 @@
                     ${tabelaLinhasHtml}
                 </tbody>
             </table>
+        </div>
+        
+        <div style="font-size: 10px; color: #64748b; margin-top: 10px; padding: 0 4px; line-height: 1.5; page-break-inside: avoid;">
+            <strong>* Nota Explicativa (Consolidação de Sede):</strong> Para as localidades classificadas como <strong>Sede Municipal</strong> (marcadas com <strong>*</strong>), os valores representam a população e os domicílios agregados de <strong>todos os setores censitários do núcleo urbano consolidado</strong> daquele município. Para as demais categorias (Vilas e Lugares Rurais), os valores indicam o setor censitário rural pontual exato onde a comunidade está geograficamente assentada.
         </div>
 
     </div>
