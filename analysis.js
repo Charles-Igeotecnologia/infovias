@@ -199,6 +199,14 @@
 
         // Atualizar estatísticas se o raio for 0 (reseta para zero e limpa lista)
         if (raioKm === 0) {
+            totalPopEst = 0;
+            totalDomEst = 0;
+            setoresAfetadosEst = 0;
+            popCapitalEst = 0;
+            popInteriorEst = 0;
+            domCapitalEst = 0;
+            domInteriorEst = 0;
+            
             atualizarEstatisticasSidebar([], 0);
             atualizarListaSidebar([]);
             return;
