@@ -722,41 +722,55 @@ function configurarLocalidades(geojson) {
         },
         onEachFeature: function(feature, layer) {
             const props  = feature.properties;
-            const latlng = layer.getLatLng();
-            const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${latlng.lat},${latlng.lng}`;
+            // Popup reativo dinâmico para calcular e exibir a distância até as InfoVias no momento do clique
+            layer.bindPopup(function(layerRef) {
+                const fProps = layerRef.feature.properties;
+                const fLatLng = layerRef.getLatLng();
+                const fMapsUrl = `https://www.google.com/maps/search/?api=1&query=${fLatLng.lat},${fLatLng.lng}`;
+                
+                const fCatMapa = fProps.CATEGORIA_MAPA || 'Rural';
+                const fRotuloCat = fCatMapa === 'Sede' ? 'Sede Municipal' : (fCatMapa === 'Vila' ? 'Vila' : 'Lugar Rural');
+                const fClasseBadge = fCatMapa.toLowerCase();
+                
+                // Calcular distância até a infovia em tempo real
+                let distInfoviaText = "N/A";
+                if (window.obterDistanciaAInfoViaMaisProxima) {
+                    const distVal = window.obterDistanciaAInfoViaMaisProxima(layerRef.feature);
+                    if (distVal !== null) {
+                        distInfoviaText = distVal < 1 
+                            ? `<strong>${Math.round(distVal * 1000)} m</strong>` 
+                            : `<strong>${distVal.toFixed(1)} km</strong>`;
+                    }
+                }
 
-            // Null-check no CATEGORIA_MAPA para evitar erro em features com campo ausente
-            const catMapa     = props.CATEGORIA_MAPA || 'Rural';
-            const rotuloCat   = catMapa === 'Sede' ? 'Sede Municipal' : (catMapa === 'Vila' ? 'Vila' : 'Lugar Rural');
-            const classeBadge = catMapa.toLowerCase();
-
-            const popupContent = `
-                <div style="min-width: 300px; font-family: 'Inter', sans-serif;">
-                    <h4 style="margin-bottom: 8px; font-size: 13px; color: var(--accent-cyan); font-weight: 600; display: flex; justify-content: space-between; align-items: center;">
-                        <span>${props.NM_LOCALIDADE || 'Localidade'}</span>
-                        <span class="prio-badge ${classeBadge}" style="font-size: 8px; padding: 2px 6px; margin-left: 10px;">
-                            ${rotuloCat}
-                        </span>
-                    </h4>
-                    <table class="popup-report-table">
-                        <tr><th>Cód. Localidade</th><td>${props.CD_LOCALIDADE ? parseInt(props.CD_LOCALIDADE) : 'N/A'}</td></tr>
-                        <tr><th>Estado / UF</th><td>${props.NM_UF || 'N/A'} (${props.SIGLA_UF || 'N/A'}) (Cód: ${props.CD_UF || 'N/A'})</td></tr>
-                        <tr><th>Município</th><td>${props.NM_MUN || 'N/A'} (Cód: ${props.CD_MUN || 'N/A'})</td></tr>
-                        <tr><th>Dist. Sede Municipal</th><td>${(props.DIST_MUNICIPIO !== undefined && props.DIST_MUNICIPIO !== null) ? (props.DIST_MUNICIPIO === 0 ? '<strong>Sede do Município</strong>' : `<strong>${props.DIST_MUNICIPIO.toFixed(1)} km</strong>`) : 'N/A'}</td></tr>
-                        <tr><th>Classificação</th><td><strong>${rotuloCat}</strong></td></tr>
-                        <tr><th>Categoria Censo</th><td>${props.CT_LOCALIDADE || 'N/A'}</td></tr>
-                        <tr><th>Subcategoria</th><td>${props.SCT_LOCALIDADE || 'N/A'}</td></tr>
-                        <tr><th>Região Intermed.</th><td>${props.NM_RGINT || 'N/A'} (Cód: ${props.CD_RGINT || 'N/A'})</td></tr>
-                        <tr><th>Região Imediata</th><td>${props.NM_RGI || 'N/A'} (Cód: ${props.CD_RGI || 'N/A'})</td></tr>
-                        <tr><th>Latitude</th><td>${latlng.lat.toFixed(6)}</td></tr>
-                        <tr><th>Longitude</th><td>${latlng.lng.toFixed(6)}</td></tr>
-                    </table>
-                    <a href="${mapsUrl}" target="_blank" class="popup-maps-link">
-                        <i class="fa-solid fa-map-location-dot"></i> Visualizar no Google Maps
-                    </a>
-                </div>
-            `;
-            layer.bindPopup(popupContent, { maxWidth: 340, autoPan: true });
+                return `
+                    <div style="min-width: 300px; font-family: 'Inter', sans-serif;">
+                        <h4 style="margin-bottom: 8px; font-size: 13px; color: var(--accent-cyan); font-weight: 600; display: flex; justify-content: space-between; align-items: center;">
+                            <span>${fProps.NM_LOCALIDADE || 'Localidade'}</span>
+                            <span class="prio-badge ${fClasseBadge}" style="font-size: 8px; padding: 2px 6px; margin-left: 10px;">
+                                ${fRotuloCat}
+                            </span>
+                        </h4>
+                        <table class="popup-report-table">
+                            <tr><th>Cód. Localidade</th><td>${fProps.CD_LOCALIDADE ? parseInt(fProps.CD_LOCALIDADE) : 'N/A'}</td></tr>
+                            <tr><th>Estado / UF</th><td>${fProps.NM_UF || 'N/A'} (${fProps.SIGLA_UF || 'N/A'}) (Cód: ${fProps.CD_UF || 'N/A'})</td></tr>
+                            <tr><th>Município</th><td>${fProps.NM_MUN || 'N/A'} (Cód: ${fProps.CD_MUN || 'N/A'})</td></tr>
+                            <tr><th>Dist. Sede Municipal</th><td>${(fProps.DIST_MUNICIPIO !== undefined && fProps.DIST_MUNICIPIO !== null) ? (fProps.DIST_MUNICIPIO === 0 ? '<strong>Sede do Município</strong>' : `<strong>${fProps.DIST_MUNICIPIO.toFixed(1)} km</strong>`) : 'N/A'}</td></tr>
+                            <tr><th>Dist. InfoVia mais próxima</th><td><span style="color: #ff8800; font-weight: 600;">${distInfoviaText}</span></td></tr>
+                            <tr><th>Classificação</th><td><strong>${fRotuloCat}</strong></td></tr>
+                            <tr><th>Categoria Censo</th><td>${fProps.CT_LOCALIDADE || 'N/A'}</td></tr>
+                            <tr><th>Subcategoria</th><td>${fProps.SCT_LOCALIDADE || 'N/A'}</td></tr>
+                            <tr><th>Região Intermed.</th><td>${fProps.NM_RGINT || 'N/A'} (Cód: ${fProps.CD_RGINT || 'N/A'})</td></tr>
+                            <tr><th>Região Imediata</th><td>${fProps.NM_RGI || 'N/A'} (Cód: ${fProps.CD_RGI || 'N/A'})</td></tr>
+                            <tr><th>Latitude</th><td>${fLatLng.lat.toFixed(6)}</td></tr>
+                            <tr><th>Longitude</th><td>${fLatLng.lng.toFixed(6)}</td></tr>
+                        </table>
+                        <a href="${fMapsUrl}" target="_blank" class="popup-maps-link">
+                            <i class="fa-solid fa-map-location-dot"></i> Visualizar no Google Maps
+                        </a>
+                    </div>
+                `;
+            }, { maxWidth: 340, autoPan: true });
 
             // Tooltip leve ao hover para confirmação visual antes do clique
             layer.bindTooltip(props.NM_LOCALIDADE || 'Localidade', {

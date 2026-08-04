@@ -88,6 +88,7 @@
 
         // Expor a função de análise globalmente para sincronização com app.js
         window.executarAnaliseEspacial = executarAnaliseEspacial;
+        window.obterDistanciaAInfoViaMaisProxima = obterDistanciaAInfoViaMaisProxima;
 
         if (btnReset) {
             btnReset.addEventListener("click", resetarFiltros);
