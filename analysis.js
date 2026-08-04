@@ -4,6 +4,7 @@
     let activeBufferLayer     = null; // Camada Leaflet que exibe a área de influência (buffer)
     let bufferDebounceTimer   = null; // Timer para evitar múltiplos cálculos enquanto arrasta o slider
     let localidadesAfetadasList = []; // Cache das localidades afetadas pelo filtro atual
+    let linhasAfetadasList      = []; // Cache das infovias afetadas pelo filtro atual
 
     // Variáveis demográficas calculadas (Censo 2022)
     let totalPopEst = 0;
@@ -205,6 +206,7 @@
         limparCamadaBuffer();
         restaurarEstiloOriginalLocalidades();
         localidadesAfetadasList = [];
+        linhasAfetadasList = [];
 
         const selectMunicipio = document.getElementById("select-municipio");
         const cdMunSelecionado = (selectMunicipio && !selectMunicipio.disabled) ? selectMunicipio.value : "all";
@@ -594,6 +596,54 @@
         defs.appendChild(pattern);
     }
 
+    // Calcula a menor distância em km de uma localidade até a infovia selecionada (ou a infovia mais próxima em geral)
+    function obterDistanciaAInfoViaMaisProxima(localidade) {
+        const selectInfovia = document.getElementById("select-infovia");
+        const selectMunicipio = document.getElementById("select-municipio");
+        
+        const infoviaSelecionada = selectInfovia ? selectInfovia.value : "all";
+        const cdMunSelecionado = (selectMunicipio && !selectMunicipio.disabled) ? selectMunicipio.value : "all";
+        const modoMunicipal = cdMunSelecionado !== "all";
+        
+        const dataLinhas = window.geoportalData.infovias;
+        if (!dataLinhas || !dataLinhas.features || dataLinhas.features.length === 0) {
+            return null;
+        }
+        
+        let linhasParaCalcular = [];
+        
+        if (modoMunicipal) {
+            linhasParaCalcular = (linhasAfetadasList && linhasAfetadasList.length > 0)
+                ? linhasAfetadasList
+                : dataLinhas.features;
+        } else {
+            if (infoviaSelecionada !== "all") {
+                linhasParaCalcular = dataLinhas.features.filter(f => f.properties.KML_FOLDER === infoviaSelecionada);
+            } else {
+                linhasParaCalcular = dataLinhas.features;
+            }
+        }
+        
+        if (linhasParaCalcular.length === 0) {
+            linhasParaCalcular = dataLinhas.features;
+        }
+        
+        let menorDistancia = Infinity;
+        
+        linhasParaCalcular.forEach(infovia => {
+            try {
+                const dist = turf.pointToLineDistance(localidade.geometry, infovia.geometry, { units: 'kilometers' });
+                if (dist < menorDistancia) {
+                    menorDistancia = dist;
+                }
+            } catch (err) {
+                // Silencioso
+            }
+        });
+        
+        return menorDistancia === Infinity ? null : menorDistancia;
+    }
+
     // Restaura as propriedades padrão de raio e borda de todos os circleMarkers
     function restaurarEstiloOriginalLocalidades() {
         const dataPontos = window.geoportalData.localidades;
@@ -800,11 +850,16 @@
             const distSedeText = (props.DIST_MUNICIPIO !== undefined && props.DIST_MUNICIPIO !== null && props.DIST_MUNICIPIO > 0)
                 ? ` • <span style="color: var(--accent-cyan); font-weight: 500;">${props.DIST_MUNICIPIO.toFixed(1)} km da Sede</span>`
                 : (props.CATEGORIA_MAPA === 'Sede' ? ' • <span style="color: var(--priority-medium); font-weight: 600;">Sede</span>' : '');
+            
+            const distInfoviaVal = obterDistanciaAInfoViaMaisProxima(loc);
+            const distInfoviaText = distInfoviaVal !== null
+                ? ` • <span style="color: #ff8800; font-weight: 500;">${distInfoviaVal < 1 ? `${Math.round(distInfoviaVal * 1000)} m` : `${distInfoviaVal.toFixed(1)} km`} da InfoVia</span>`
+                : '';
 
             itemDiv.innerHTML = `
                 <div>
                     <div class="name-uf" title="${props.NM_LOCALIDADE}">${props.NM_LOCALIDADE} (${props.SIGLA_UF})</div>
-                    <div class="mun">${props.NM_MUN || 'Município não cadastrado'}${distSedeText}</div>
+                    <div class="mun">${props.NM_MUN || 'Município não cadastrado'}${distSedeText}${distInfoviaText}</div>
                 </div>
                 <span class="prio-badge ${badgeClass}">${rotuloCat}</span>
             `;
@@ -925,7 +980,7 @@
         console.log("Iniciando exportação de CSV...");
         
         // Cabeçalho do CSV (com a nova coluna de distância)
-        let csvContent = "Nome_Localidade;Estado_UF;Municipio;Categoria_Censo;Classificacao_Mapa;Distancia_Sede_KM;Latitude;Longitude\n";
+        let csvContent = "Nome_Localidade;Estado_UF;Municipio;Categoria_Censo;Classificacao_Mapa;Distancia_Sede_KM;Distancia_InfoVia_KM;Latitude;Longitude\n";
         
         // Corpo do CSV
         localidadesAfetadasList.forEach(loc => {
@@ -939,10 +994,14 @@
             const cat       = props.CT_LOCALIDADE || "";
             const classeMapa = props.CATEGORIA_MAPA === 'Sede' ? 'Sede Municipal' : (props.CATEGORIA_MAPA === 'Vila' ? 'Vila' : 'Lugar Rural');
             const distSede   = props.DIST_MUNICIPIO !== undefined && props.DIST_MUNICIPIO !== null ? props.DIST_MUNICIPIO : "";
+            
+            const distInfoviaVal = obterDistanciaAInfoViaMaisProxima(loc);
+            const distInfovia = distInfoviaVal !== null ? distInfoviaVal.toFixed(2) : "";
+            
             const lat       = coords[1].toFixed(6);
             const lng       = coords[0].toFixed(6);
             
-            csvContent += `"${nome}";"${uf}";"${mun}";"${cat}";"${classeMapa}";${distSede};${lat};${lng}\n`;
+            csvContent += `"${nome}";"${uf}";"${mun}";"${cat}";"${classeMapa}";${distSede};${distInfovia};${lat};${lng}\n`;
         });
 
         // Gerar o Blob e forçar download
@@ -1065,6 +1124,11 @@
                 }
             }
             
+            const distInfoviaVal = obterDistanciaAInfoViaMaisProxima(loc);
+            const distInfoviaText = distInfoviaVal !== null
+                ? (distInfoviaVal < 1 ? `${Math.round(distInfoviaVal * 1000)} m` : `${distInfoviaVal.toFixed(1)} km`)
+                : "N/A";
+            
             tabelaLinhasHtml += `
                 <tr>
                     <td style="text-align: center;">${index + 1}</td>
@@ -1078,6 +1142,9 @@
                     <td style="text-align: center; font-weight: 500;">${domText}</td>
                     <td style="text-align: center; font-weight: 500; font-size: 12px; color: ${props.DIST_MUNICIPIO === 0 ? 'var(--accent-cyan)' : '#334155'};">
                         ${distSedeText}
+                    </td>
+                    <td style="text-align: center; font-weight: 500; font-size: 12px; color: #334155;">
+                        ${distInfoviaText}
                     </td>
                     <td style="font-family: monospace; font-size: 11px; text-align: center;">
                         ${coords[1].toFixed(6)}, ${coords[0].toFixed(6)}
@@ -1418,6 +1485,7 @@
                         <th style="width: 110px; text-align: center;">População (Setor)</th>
                         <th style="width: 110px; text-align: center;">Domicílios (Setor)</th>
                         <th style="width: 100px; text-align: center;">Dist. Sede</th>
+                        <th style="width: 100px; text-align: center;">Dist. InfoVia</th>
                         <th style="width: 170px; text-align: center;">Coordenadas (Lat, Lng)</th>
                     </tr>
                 </thead>
