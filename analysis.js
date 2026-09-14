@@ -375,16 +375,12 @@
 
             todasLocalidades.forEach(localidade => {
                 if (String(localidade.properties.CD_MUN) === String(cdMunSelecionado)) {
-                    if (categoriaSelecionada === "all" || localidade.properties.CT_LOCALIDADE === categoriaSelecionada) {
+                    if (LocalityModel.matches(localidade, categoriaSelecionada)) {
                         
                         // Deduplicação por Nome e Coordenadas Geográficas
                         const coords = localidade.geometry.coordinates;
                         const nome = localidade.properties.NM_LOCALIDADE;
-                        const jaExiste = localidadesAfetadasList.some(item => 
-                            item.properties.NM_LOCALIDADE === nome && 
-                            Math.abs(item.geometry.coordinates[0] - coords[0]) < 0.0001 && 
-                            Math.abs(item.geometry.coordinates[1] - coords[1]) < 0.0001
-                        );
+                        const jaExiste = localidadesAfetadasList.includes(localidade);
                         
                         if (!jaExiste) {
                             localidadesAfetadasList.push(localidade);
@@ -501,7 +497,7 @@
 
             localidadesFeatures.forEach(localidade => {
                 if (ufSelecionada !== "all" && localidade.properties.SIGLA_UF !== ufSelecionada) return;
-                if (categoriaSelecionada !== "all" && localidade.properties.CT_LOCALIDADE !== categoriaSelecionada) return;
+                if (!LocalityModel.matches(localidade, categoriaSelecionada)) return;
 
                 // Verificação espacial robusta contra o buffer unificado
                 const estaDentro = turf.booleanPointInPolygon(localidade.geometry, bufferGeoJSON);
@@ -510,11 +506,7 @@
                     // Deduplicação por Nome e Coordenadas Geográficas
                     const coords = localidade.geometry.coordinates;
                     const nome = localidade.properties.NM_LOCALIDADE;
-                    const jaExiste = localidadesAfetadasList.some(item => 
-                        item.properties.NM_LOCALIDADE === nome && 
-                        Math.abs(item.geometry.coordinates[0] - coords[0]) < 0.0001 && 
-                        Math.abs(item.geometry.coordinates[1] - coords[1]) < 0.0001
-                    );
+                    const jaExiste = localidadesAfetadasList.includes(localidade);
                     
                     if (!jaExiste) {
                         localidadesAfetadasList.push(localidade);
@@ -728,7 +720,13 @@
     // MELHORIA 4.1: Atualiza contadores + percentuais + gráfico SVG
     function atualizarEstatisticasSidebar(afetadas, raioKm) {
         const total = afetadas.length;
-        const totalGeral = 11186; // Total fixo de localidades na base
+        const uf = selectUF?.value || 'all';
+        const municipality = document.getElementById('select-municipio');
+        const code = municipality && !municipality.disabled ? municipality.value : 'all';
+        const universe = LocalityModel.territory(window.geoportalData.localidades?.features || [], uf, 'all', 'all');
+        const totalGeral = universe.length;
+        const totalElement = document.getElementById('stat-geral');
+        if (totalElement) totalElement.textContent = totalGeral.toLocaleString('pt-BR');
 
         if (statTotal) statTotal.textContent = total.toLocaleString('pt-BR');
 
@@ -762,12 +760,12 @@
         if (statRurais) statRurais.textContent = totalRurais.toLocaleString('pt-BR');
 
         // MELHORIA 4.1: Percentuais em relação ao total geral
-        const pctTotal  = total > 0 ? ((total  / totalGeral) * 100).toFixed(1) : 0;
+        const pctTotal  = totalGeral > 0 ? ((total  / totalGeral) * 100).toFixed(1) : 0;
         const pctSedes  = total > 0 ? ((totalSedes  / total) * 100).toFixed(0) : 0;
         const pctVilas  = total > 0 ? ((totalVilas  / total) * 100).toFixed(0) : 0;
         const pctRurais = total > 0 ? ((totalRurais / total) * 100).toFixed(0) : 0;
 
-        if (statTotalPct)  statTotalPct.textContent  = `${pctTotal}% do total`;
+        if (statTotalPct)  statTotalPct.textContent  = `${pctTotal}% das localidades ${uf === 'all' ? 'dos quatro estados' : ({AM:'do Amazonas',PA:'do Pará',AP:'do Amapá',RR:'de Roraima'}[uf])}`;
         if (statSedesPct)  statSedesPct.textContent  = `${pctSedes}%`;
         if (statVilasPct)  statVilasPct.textContent  = `${pctVilas}%`;
         if (statRuraisPct) statRuraisPct.textContent = `${pctRurais}%`;
@@ -794,7 +792,7 @@
             // Contar ocorrências por Categoria Censo (CT_LOCALIDADE)
             const ctCounts = {};
             afetadas.forEach(loc => {
-                const ct = loc.properties.CT_LOCALIDADE || "Outras Localidades";
+                const ct = LocalityModel.categories(loc) || "Outras Localidades";
                 ctCounts[ct] = (ctCounts[ct] || 0) + 1;
             });
 
@@ -1055,7 +1053,7 @@
             const nome      = (props.NM_LOCALIDADE || "").replace(/;/g, ",").replace(/"/g, '""');
             const uf        = props.SIGLA_UF || "";
             const mun       = (props.NM_MUN  || "").replace(/;/g, ",").replace(/"/g, '""');
-            const cat       = props.CT_LOCALIDADE || "";
+            const cat       = LocalityModel.categories(loc);
             const classeMapa = props.CATEGORIA_MAPA === 'Sede' ? 'Sede Municipal' : (props.CATEGORIA_MAPA === 'Vila' ? 'Vila' : 'Lugar Rural');
             const distSede   = props.DIST_MUNICIPIO !== undefined && props.DIST_MUNICIPIO !== null ? props.DIST_MUNICIPIO : "";
             
@@ -1199,7 +1197,7 @@
                     <td style="text-align: center;">${index + 1}</td>
                     <td><strong>${props.NM_LOCALIDADE || 'N/A'}</strong></td>
                     <td>${props.NM_MUN || 'N/A'} (${props.SIGLA_UF || 'N/A'})</td>
-                    <td>${props.CT_LOCALIDADE || 'N/A'}</td>
+                    <td>${LocalityModel.categories(loc) || 'N/A'}</td>
                     <td style="text-align: center;">
                         <span class="prio-tag ${props.CATEGORIA_MAPA.toLowerCase()}">${rotuloCat}</span>
                     </td>
@@ -1221,7 +1219,7 @@
         // Contar ocorrências por Categoria Censo (CT_LOCALIDADE) no relatório
         const ctCountsReport = {};
         localidadesAfetadasList.forEach(loc => {
-            const ct = loc.properties.CT_LOCALIDADE || "Outras Localidades";
+            const ct = LocalityModel.categories(loc) || "Outras Localidades";
             ctCountsReport[ct] = (ctCountsReport[ct] || 0) + 1;
         });
 

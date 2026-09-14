@@ -1,6 +1,7 @@
 """Valida os GeoJSON publicados e atualiza catálogo: python scripts/validate_data.py --catalog."""
 import argparse
 import hashlib
+import subprocess
 import json
 from pathlib import Path
 
@@ -46,4 +47,6 @@ if __name__ == '__main__':
     datasets = [inspect(p) for pattern in patterns for p in sorted(ROOT.glob(pattern))]
     if args.catalog:
         (ROOT / 'data-catalog.json').write_text(json.dumps({'schemaVersion': 1, 'datasets': datasets}, ensure_ascii=False, indent=2), encoding='utf-8')
+    if args.catalog:
+        subprocess.run(['node', str(ROOT / 'scripts/update_locality_counts.cjs')], check=True)
     print(f'{len(datasets)} bases válidas; {sum(d["features"] for d in datasets)} feições. Topologia e procedência não são certificadas por este teste.')

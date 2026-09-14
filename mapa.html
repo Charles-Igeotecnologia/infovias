@@ -260,17 +260,17 @@
 
         <!-- Seção 2: Estatísticas Gerais -->
         <div class="sidebar-section">
-            <h3><i class="fa-solid fa-chart-simple"></i> Comunidades Impactadas</h3>
+            <h3><i class="fa-solid fa-chart-simple"></i> Localidades selecionadas</h3>
             
             <div class="stats-container">
                 <div class="stat-card accent">
-                    <span class="label">Total Afetadas</span>
+                    <span class="label">Localidades na análise</span>
                     <span id="stat-total" class="value">0</span>
-                    <span id="stat-total-pct" class="stat-pct">0% do total</span>
+                    <span id="stat-total-pct" class="stat-pct">0% das localidades dos quatro estados</span>
                 </div>
                 <div class="stat-card">
-                    <span class="label">Total Geral</span>
-                    <span id="stat-geral" class="value">11.186</span>
+                    <span id="state-total-label" class="label">Localidades dos quatro estados</span>
+                    <span id="stat-geral" class="value">—</span>
                 </div>
             </div>
             
@@ -336,7 +336,7 @@
 
         <!-- Seção 3: Listagem de Localidades Adjacentes -->
         <div class="sidebar-section" style="flex: 1; display: flex; flex-direction: column;">
-            <h3><i class="fa-solid fa-list-check"></i> Comunidades no Raio</h3>
+            <h3><i class="fa-solid fa-list-check"></i> Localidades da análise</h3>
             <div id="impact-list" class="impact-results-list">
                 <div class="content" style="color: var(--text-muted); text-align: center; padding: 20px 0; font-size: 12px;">
                     Aumente o raio de proximidade para listar as comunidades impactadas ao redor das infovias.
@@ -384,9 +384,11 @@
     <script src="https://unpkg.com/@turf/turf@6.5.0/turf.min.js"></script>
 
     <!-- Scripts da Aplicação (Organizados por Responsabilidade) -->
+    <script src="locality-model.js"></script>
     <script src="app.js?v=3.2.0"></script>
     <script src="measure.js?v=3.2.0"></script>
     <script src="professional.js"></script>
+    <script src="territory-directory.js"></script>
     <script src="analysis.js?v=3.2.0"></script>
 </body>
 </html>

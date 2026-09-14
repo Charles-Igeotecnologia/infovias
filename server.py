@@ -6,7 +6,7 @@ from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
 ROOT = Path(__file__).resolve().parent
-PUBLIC_FILES = {'index.html', 'mapa.html', 'app.js', 'analysis.js', 'measure.js', 'professional.js', 'spatial-worker.js', 'styles.css', 'data-catalog.json', 'logo_evereste.png', 'infovias.geojson', 'pontos_estrategicos.geojson', 'localidades.geojson', 'favicon.ico'}
+PUBLIC_FILES = {'index.html', 'mapa.html', 'app.js', 'analysis.js', 'measure.js', 'professional.js', 'locality-model.js', 'territory-directory.js', 'spatial-worker.js', 'styles.css', 'data-catalog.json', 'logo_evereste.png', 'infovias.geojson', 'pontos_estrategicos.geojson', 'localidades.geojson', 'favicon.ico'}
 PUBLIC_DIRS = {'municipios', 'setores_censitarios', 'localidades_por_uf'}
 
 class Handler(http.server.SimpleHTTPRequestHandler):

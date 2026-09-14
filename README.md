@@ -51,3 +51,17 @@ Autenticação, banco multiusuário, edição de dados e hospedagem instituciona
 A página `index.html` apresenta a abrangência com um mapa vetorial gerado das bases locais. As contagens são consultadas em `data-catalog.json`; os cartões abrem `mapa.html?uf=AM` (ou PA, AP, RR), aplicando o filtro e o enquadramento do estado.
 
 Para atualizar o desenho de apresentação após substituir limites municipais ou infovias, execute `python scripts/build_home.py` em um ambiente com Shapely. O script também contém o modelo da página: alterações de apresentação devem ser feitas nele e regeneradas. A simplificação geométrica é exclusiva da apresentação; não modifica os dados utilizados nas análises.
+
+## Contagens territoriais corrigidas
+
+As quatro bases contêm 11.186 registros de origem e 9.016 localidades consolidadas pela regra operacional: mesma UF, município e nome, com diferença inferior a 0,0001 grau em cada coordenada. Essa regra não certifica identidade cadastral. Nenhum registro é excluído dos GeoJSON; os atributos ficam preservados em REGISTROS_ORIGEM, com todas as categorias em CATEGORIAS e SUBCATEGORIAS durante o carregamento.
+
+Página inicial, mapa e relatório compartilham `locality-model.js`. O percentual tem como denominador todas as localidades do estado selecionado (todos os municípios e categorias); sem UF, usa os quatro estados. O total municipal também inclui todas as categorias e permanece separado da análise. Na análise ativa, os marcadores representam os resultados; sem análise, o mapa de contexto aplica os controles de distância cadastrada. O detalhamento de categorias agrupa combinações de categorias; a simbologia Sede/Vila/Rural usa a classificação do primeiro registro preservado.
+
+Execute `node scripts/update_locality_counts.cjs` após atualizar localidades; `python scripts/validate_data.py --catalog` também executa essa etapa (requer Node). Testes: `node --test tests/*.test.cjs`. O relatório em auditoria/ documenta o diagnóstico anterior à correção.
+
+### Referências e relação estadual
+
+O cartão estadual é estável ao trocar município, categoria, infovia e distância. O cartão municipal aparece quando um município é selecionado. Somente o cartão de análise acompanha todos os filtros.
+
+A relação estadual agrupa localidades por município, com pesquisa independente em nome da localidade, município e categorias, e páginas de 100 registros. A exportação estadual baixa a relação inteira do estado, independentemente da busca e dos filtros da análise. Não confundir com o CSV dos resultados. O módulo `territory-directory.js` controla essa apresentação.

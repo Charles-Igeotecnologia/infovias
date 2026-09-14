@@ -29,6 +29,7 @@
     };
     let snapshot = null;
     let results = [];
+    const countNote = document.createElement('p'); countNote.id = 'count-method'; countNote.style.fontSize = '12px'; section.append(countNote);
     let reportMap = '';
     function buildReportMap(area, features) {
         if (!area?.features?.length) return '';
@@ -87,7 +88,7 @@
                 if (marker && window.geoportalLayers.localidadesCluster) window.geoportalLayers.localidadesCluster.zoomToShowLayer(marker, () => marker.openPopup());
                 else window.map.setView([f.geometry.coordinates[1], f.geometry.coordinates[0]], 13);
             }); cell.append(button); row.append(cell);
-            for (const key of ['NM_MUN', 'CT_LOCALIDADE']) { const td = document.createElement('td'); td.textContent = f.properties[key] || 'Não informado'; row.append(td); }
+            for (const key of ['NM_MUN', 'CT_LOCALIDADE']) { const td = document.createElement('td'); td.textContent = (key === 'CT_LOCALIDADE' ? LocalityModel.categories(f) : f.properties[key]) || 'Não informado'; row.append(td); }
             body.append(row);
         });
     }
@@ -95,12 +96,20 @@
     window.addEventListener('analysis-status', ({detail}) => {
         sync();
         byId('analysis-status').textContent = detail.state === 'loading' ? 'Processando… Aguarde para exportar.' : detail.state === 'error' ? detail.message : mode.value === 'municipal' && municipality.value === 'all' ? 'Selecione um estado e um município.' : 'Análise concluída.';
-        if (detail.state !== 'ready') { snapshot = null; results = []; render(); byId('download-audit').disabled = true; }
+        if (detail.state !== 'ready') { window.analysisMapSelection = null; snapshot = null; results = []; render(); byId('download-audit').disabled = true; }
     });
     window.addEventListener('analysis-results', async ({detail}) => {
         results = detail.features;
+        const active = detail.area?.features?.length > 0;
+        window.analysisMapSelection = active ? results : null;
+        window.atualizarHeatmapGlobal?.();
+        window.filtrarLocalidadesNoMapa?.(byId('select-uf').value, byId('select-categoria-ct').value);
+        const universe = LocalityModel.territory(window.geoportalData.localidades?.features || [], byId('select-uf').value, municipality.disabled ? 'all' : municipality.value, byId('select-categoria-ct').value);
+        const rawCount = universe.reduce((n,f) => n + f.properties.REGISTROS_ORIGEM.filter(p => byId('select-categoria-ct').value === 'all' || p.CT_LOCALIDADE === byId('select-categoria-ct').value).length, 0);
+        countNote.textContent = `${universe.length.toLocaleString('pt-BR')} localidades consolidadas / ${rawCount.toLocaleString('pt-BR')} registros de origem no território e categoria. ` + (active ? `Mapa e relatório: ${results.length} localidades selecionadas; filtros de distância de contexto não se aplicam.` : 'Mapa de contexto: aplica os filtros de distância cadastrada de 50 km.');
+
         reportMap = buildReportMap(detail.area, results);
-        snapshot = {generatedAt: detail.generatedAt, criteria: criteria(), method: byId('analysis-method').textContent, count: results.length, catalog: 'data-catalog.json', capitalDefinition: 'Municípios das capitais, incluindo área rural'};
+        snapshot = {generatedAt: detail.generatedAt, criteria: criteria(), method: byId('analysis-method').textContent, count: results.length, catalog: 'data-catalog.json', stateLocalities: LocalityModel.territory(window.geoportalData.localidades?.features || [], byId('select-uf').value, 'all', 'all').length, stateName: selected('select-uf'), territorialLocalities: universe.length, territorialRecords: rawCount, capitalDefinition: 'Municípios das capitais, incluindo área rural'};
         const current = snapshot; render();
         const catalog = await catalogPromise;
         if (snapshot !== current) return;
@@ -113,7 +122,7 @@
         const url = URL.createObjectURL(new Blob([JSON.stringify(snapshot, null, 2)], {type:'application/json'}));
         const a = document.createElement('a'); a.href = url; a.download = 'registro-analise.json'; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
     });
-    window.analysisAuditHTML = () => snapshot ? `<section style="padding:24px;border-bottom:1px solid #ccc"><h2>Registro da análise</h2><p>${escape(snapshot.criteria)}</p><p>${escape(snapshot.method)}</p><p>Gerado em ${escape(snapshot.generatedAt)}. Capital: município completo, incluindo área rural. Setores: recorte de 50 km. Categorias filtram localidades, não a demografia.</p>${reportMap}<details><summary>Versões dos dados (SHA-256)</summary>${(snapshot.datasets || []).map(d => `<p style="font-size:9px;overflow-wrap:anywhere">${escape(d.path)}: ${escape(d.sha256)}</p>`).join('')}</details></section>` : '';
+    window.analysisAuditHTML = () => snapshot ? `<section style="padding:24px;border-bottom:1px solid #ccc"><h2>Registro da análise</h2><p>${escape(snapshot.criteria)}</p><p>${escape(snapshot.method)}</p><p>Referência estadual — ${escape(snapshot.stateName)}: ${snapshot.stateLocalities} localidades de todos os municípios e categorias.</p><p>Território e categoria: ${snapshot.territorialLocalities} localidades consolidadas, ${snapshot.territorialRecords} registros de origem. Seleção: ${snapshot.count} localidades.</p><p>Gerado em ${escape(snapshot.generatedAt)}. Capital: município completo, incluindo área rural. Setores: recorte de 50 km. Categorias filtram localidades, não a demografia.</p>${reportMap}<details><summary>Versões dos dados (SHA-256)</summary>${(snapshot.datasets || []).map(d => `<p style="font-size:9px;overflow-wrap:anywhere">${escape(d.path)}: ${escape(d.sha256)}</p>`).join('')}</details></section>` : '';
     const style = document.createElement('style');
     style.textContent = '[hidden]{display:none!important} #analysis-summary,#analysis-status{font-size:12px;line-height:1.6} details p{font-size:12px;line-height:1.6} summary{cursor:pointer;padding:10px 0} :focus-visible{outline:3px solid #00bcd4;outline-offset:3px} table{width:100%;font-size:11px;border-collapse:collapse} th,td{padding:8px;text-align:left;border-bottom:1px solid #64748b55} td button{color:inherit;background:transparent;border:0;text-align:left;cursor:pointer;text-decoration:underline}';
     document.head.append(style); sync(); render();

@@ -319,6 +319,7 @@ async function carregarBasesGeograficas() {
             }
 
             setProgress(100, "Pronto!");
+            window.executarAnaliseEspacial?.();
 
             // Esconder o overlay com fade out suave
             setTimeout(() => {
@@ -720,7 +721,7 @@ async function carregarLocalidadesEstadoImpl(uf) {
         const cacheBust = "?v=" + Date.now();
         const res = await fetch(`localidades_por_uf/localidades_${uf}.geojson` + cacheBust);
         if (!res.ok) throw new Error(`Status ${res.status}`);
-        const geojson = await res.json();
+        const geojson = LocalityModel.consolidate(await res.json());
 
         // Inicializar cluster se não estiver inicializado
         inicializarClusterLocalidades();
@@ -791,8 +792,8 @@ async function carregarLocalidadesEstadoImpl(uf) {
                             <tr><th>Dist. Sede Municipal</th><td>${(fProps.DIST_MUNICIPIO !== undefined && fProps.DIST_MUNICIPIO !== null) ? (fProps.DIST_MUNICIPIO === 0 ? '<strong>Sede do Município</strong>' : `<strong>${fProps.DIST_MUNICIPIO.toFixed(1)} km</strong>`) : 'N/A'}</td></tr>
                             <tr><th>Dist. InfoVia mais próxima</th><td><span style="color: #ff8800; font-weight: 600;">${distInfoviaText}</span></td></tr>
                             <tr><th>Classificação</th><td><strong>${fRotuloCat}</strong></td></tr>
-                            <tr><th>Categoria Censo</th><td>${fProps.CT_LOCALIDADE || 'N/A'}</td></tr>
-                            <tr><th>Subcategoria</th><td>${fProps.SCT_LOCALIDADE || 'N/A'}</td></tr>
+                            <tr><th>Categoria Censo</th><td>${LocalityModel.categories(layerRef.feature) || 'N/A'}</td></tr>
+                            <tr><th>Subcategoria</th><td>${(fProps.SUBCATEGORIAS || [fProps.SCT_LOCALIDADE]).join(' / ') || 'N/A'}</td></tr>
                             <tr><th>Região Intermed.</th><td>${fProps.NM_RGINT || 'N/A'} (Cód: ${fProps.CD_RGINT || 'N/A'})</td></tr>
                             <tr><th>Região Imediata</th><td>${fProps.NM_RGI || 'N/A'} (Cód: ${fProps.CD_RGI || 'N/A'})</td></tr>
                             <tr><th>Latitude</th><td>${fLatLng.lat.toFixed(6)}</td></tr>
@@ -832,6 +833,7 @@ async function carregarLocalidadesEstadoImpl(uf) {
         inicializarBuscaLocalidades();
 
         window.ufCarregandoStatus[uf] = 'loaded';
+        window.dispatchEvent(new Event('localities-loaded'));
         console.log(`[Lazy Load] Localidades de ${uf} carregadas e renderizadas.`);
 
         // Chamar filtragem no mapa para aplicar filtros atuais (UF, Categoria, Proximidade)
@@ -854,7 +856,7 @@ function atualizarHeatmapGlobal() {
     if (window.geoportalLayers.heatmapLayer) {
         window.map.removeLayer(window.geoportalLayers.heatmapLayer);
     }
-    configurarMapaDeCalor(window.geoportalData.localidades);
+    configurarMapaDeCalor(Array.isArray(window.analysisMapSelection) ? {features: window.analysisMapSelection} : window.geoportalData.localidades);
 }
 
 // Função global para filtrar os pontos de localidades mostrados no cluster do mapa com base no estado e na categoria selecionados
@@ -865,6 +867,11 @@ window.filtrarLocalidadesNoMapa = function(ufSelecionada, categoriaSelecionada) 
     
     if (!clusterGroup || !geojson || !map) return;
     
+    if (Array.isArray(window.analysisMapSelection)) {
+        clusterGroup.clearLayers();
+        clusterGroup.addLayers(window.analysisMapSelection.map(f => f._markerRef).filter(Boolean));
+        return;
+    }
     const ufs = ufSelecionada || "all";
     const cats = categoriaSelecionada || "all";
     
@@ -891,7 +898,7 @@ window.filtrarLocalidadesNoMapa = function(ufSelecionada, categoriaSelecionada) 
         if (feature._markerRef) {
             const props = feature.properties;
             const atendeUf  = (ufs === "all" || props.SIGLA_UF === ufs);
-            const atendeCat = (cats === "all" || props.CT_LOCALIDADE === cats);
+            const atendeCat = LocalityModel.matches(feature, cats);
             
             // Filtragem por distância das infovias (Melhoria 5.0)
             const dist = props.DIST_INFOVIA;
