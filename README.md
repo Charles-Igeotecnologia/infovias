@@ -65,3 +65,21 @@ Execute `node scripts/update_locality_counts.cjs` após atualizar localidades; `
 O cartão estadual é estável ao trocar município, categoria, infovia e distância. O cartão municipal aparece quando um município é selecionado. Somente o cartão de análise acompanha todos os filtros.
 
 A relação estadual agrupa localidades por município, com pesquisa independente em nome da localidade, município e categorias, e páginas de 100 registros. A exportação estadual baixa a relação inteira do estado, independentemente da busca e dos filtros da análise. Não confundir com o CSV dos resultados. O módulo `territory-directory.js` controla essa apresentação.
+
+## Organização do painel direito
+
+O painel usa três abas: Filtros, Indicadores e Localidades. Mantém cabeçalho e navegação fixos, com rolagem do conteúdo. A largura padrão é 420 px; o botão Ampliar painel alterna para 520 px em desktop. Em telas pequenas, adapta-se à largura disponível e fica acima dos controles do mapa; o botão lateral permite recolhê-lo para usar o mapa.
+
+Filtros reúne seleção e busca; Indicadores reúne totais, demografia e exportação da análise; Localidades reúne resultados, relação estadual e lista resumida. As abas suportam setas do teclado, Home e End. Implementação: sidebar-layout.js e sidebar-layout.css, sem alteração das regras de cálculo.
+
+## Seleção de infovias por estado
+
+O seletor lista rotas cujos traçados intersectam o estado escolhido, incluindo contato com divisas. A associação usa a união dos limites municipais da base local; não representa responsabilidade administrativa. Rotas compartilhadas aparecem em todas as UFs intersectadas.
+
+O mapa recorta os traçados no estado ou município selecionado. Distâncias às infovias e buffers usam esses mesmos trechos; o buffer também é intersectado com o limite territorial. A visão de todos os estados mantém os traçados completos. Os originais são preservados. Indicadores e relatório distinguem extensão territorial e extensão total dos traçados na base, medidas geodésicas em WGS 84. Trechos coincidentes com divisas podem aparecer em ambos os territórios; os totais territoriais não devem ser somados para obter o total regional.
+
+Os recortes são pré-processados em `territorial/*.json`. Após atualizar infovias ou limites municipais, execute `python scripts/build_infovia_territories.py` e `python scripts/build_territorial_routes.py` (Shapely e PyProj), e valide com `python -m unittest discover -s tests -p "test_territorial_routes.py"`. Os testes verificam hashes das fontes e contenção geométrica dos recortes dos quatro estados e 237 municípios.
+
+Ao mudar a UF, uma seleção compatível é mantida; uma incompatível volta para Todas. Sem UF, as dez rotas estão disponíveis. URLs com infovia incompatível não restauram essa seleção. Cliques em linhas fora da lista não mudam a infovia selecionada.
+
+Após atualizar infovias ou limites municipais, execute `python scripts/build_infovia_territories.py` (requer Shapely). O arquivo gerado `infovia-territories.js` contém a associação e os hashes de origem; os testes verificam se esse índice corresponde às bases atuais.

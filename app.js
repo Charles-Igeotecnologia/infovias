@@ -337,6 +337,7 @@ async function carregarBasesGeograficas() {
                 const selectUf = document.getElementById('select-uf');
                 if (selectUf) {
                     selectUf.value = ufDaUrl;
+                    preencherFiltroInfovias(window.geoportalData.infovias);
                     await atualizarDropdownMunicipios();
                     window.filtrarLocalidadesNoMapa?.(ufDaUrl, 'all');
                     const municipios = window._municipiosCache[ufDaUrl];
@@ -351,7 +352,7 @@ async function carregarBasesGeograficas() {
             const infoviaDaUrl = urlParams.get('infovia');
             if (infoviaDaUrl) {
                 const select = document.getElementById("select-infovia");
-                if (select) {
+                if (select && [...select.options].some(option => option.value === infoviaDaUrl)) {
                     select.value = infoviaDaUrl;
                     select.dispatchEvent(new Event("change"));
                 }
@@ -965,26 +966,36 @@ function configurarMapaDeCalor(geojson) {
 }
 
 // 5.5 Preenche o Selectbox de Infovias na Sidebar de Análise
+function obterInfoviasDoEstado(features, uf = document.getElementById('select-uf')?.value || 'all') {
+    if (uf === 'all') return features;
+    const allowed = new Set(InfoviaTerritories.byState[uf] || []);
+    return features.filter(f => allowed.has(f.properties.KML_FOLDER));
+}
+window.obterInfoviasDoEstado = obterInfoviasDoEstado;
+
 function preencherFiltroInfovias(geojson) {
-    const select = document.getElementById("select-infovia");
-    if (!select) return;
-
-    // Extrair pastas KML_FOLDER únicas (nomes das Infovias)
-    const infoviasSet = new Set();
-    geojson.features.forEach(f => {
-        if (f.properties.KML_FOLDER) {
-            infoviasSet.add(f.properties.KML_FOLDER);
-        }
-    });
-
-    // Ordenar e adicionar no select
-    const infoviasOrdenadas = Array.from(infoviasSet).sort();
-    infoviasOrdenadas.forEach(infovia => {
-        const option = document.createElement("option");
-        option.value = infovia;
-        option.textContent = infovia;
-        select.appendChild(option);
-    });
+    const select = document.getElementById('select-infovia');
+    const state = document.getElementById('select-uf');
+    if (!select || !state || !geojson?.features) return;
+    const previous = select.value || 'all';
+    const uf = state.value;
+    const names = [...new Set(obterInfoviasDoEstado(geojson.features, uf).map(f => f.properties.KML_FOLDER).filter(Boolean))].sort();
+    const options = [new Option(uf === 'all' ? 'Todas as infovias (quatro estados)' : `Todas as infovias de ${uf}`, 'all')];
+    for (const name of names) options.push(new Option(name, name));
+    select.replaceChildren(...options);
+    select.value = names.includes(previous) ? previous : 'all';
+    select.disabled = names.length === 0;
+    let note = document.getElementById('infovia-scope');
+    if (!note) {
+        note = document.createElement('p'); note.id = 'infovia-scope'; note.style.cssText = 'font-size:11px;line-height:1.5;margin-top:6px;color:var(--text-secondary)';
+        note.setAttribute('role','status'); select.after(note); select.setAttribute('aria-describedby',note.id);
+    }
+    note.textContent = `${names.length} infovias disponíveis${uf === 'all' ? ' nos quatro estados' : ' em ' + uf}. Associação pelo cruzamento dos traçados com os limites territoriais, incluindo divisas.`;
+    if (previous !== 'all' && !names.includes(previous)) note.textContent += ' A seleção anterior não pertence à lista deste estado; selecionadas todas as disponíveis.';
+    if (!state.dataset.infoviaFilterBound) {
+        state.dataset.infoviaFilterBound = 'true';
+        state.addEventListener('change', () => preencherFiltroInfovias(window.geoportalData.infovias), {capture:true});
+    }
 }
 
 // 5.6 Adiciona Legenda de Convenções Temáticas no Canto Inferior Esquerdo

@@ -194,7 +194,7 @@
     // Executa o processamento espacial usando Turf.js
     let bufferWorker = null;
     let cancelBuffer = null;
-    function calcularBuffer(lines, radius) {
+    function calcularBuffer(lines, radius, boundary) {
         return new Promise((resolve, reject) => {
             const worker = new Worker('spatial-worker.js');
             bufferWorker = worker;
@@ -207,7 +207,7 @@
             cancelBuffer = () => finish(new Error('Análise substituída por novos critérios.'));
             worker.onmessage = ({data}) => finish(data.error ? new Error(data.error) : null, data.result);
             worker.onerror = () => finish(new Error('Falha ao iniciar o cálculo espacial. Verifique a conexão e tente novamente.'));
-            worker.postMessage({lines, radius});
+            worker.postMessage({lines, radius, boundary});
         });
     }
     let analysisRevision = 0;
@@ -230,6 +230,8 @@
             } catch (error) {
                 if (revision !== analysisRevision) return;
                 limparCamadaBuffer();
+                window.TerritorialRoutes.apply({lines: [], boundary: null, summary: []});
+                linhasAfetadasList = [];
                 localidadesAfetadasList = [];
                 atualizarEstatisticasSidebar([], 0);
                 atualizarListaSidebar([]);
@@ -269,6 +271,11 @@
                 raioKm = 0;
             }
         }
+
+        const clipped = await window.TerritorialRoutes.prepare(ufSelecionada, cdMunSelecionado, infoviaSelecionada);
+        if (revision !== analysisRevision) return;
+        window.TerritorialRoutes.apply(clipped);
+        linhasAfetadasList = clipped.lines;
 
         // Atualizar estatísticas se o raio for 0 (e não for análise de município)
         if (raioKm === 0 && !modoMunicipal) {
@@ -404,34 +411,6 @@
                 }
             });
 
-            // 3. Filtrar InfoVias envolvidas (que cruzam ou tocam o território do município)
-            const todasInfovias = dataLinhas.features;
-            todasInfovias.forEach(infovia => {
-                try {
-                    // Testar se há pontos de intersecção entre a linha e o município usando Turf
-                    const interseccao = turf.lineIntersect(infovia, munFeature);
-                    if (interseccao && interseccao.features.length > 0) {
-                        linhasAfetadasList.push(infovia);
-                        return;
-                    }
-                    
-                    // Se não intersecta a borda, testar se a linha está totalmente contida (se o primeiro ponto está dentro)
-                    let primeiroPt;
-                    const coords = infovia.geometry.coordinates;
-                    if (infovia.geometry.type === "LineString") {
-                        primeiroPt = coords[0];
-                    } else if (infovia.geometry.type === "MultiLineString") {
-                        primeiroPt = coords[0][0];
-                    }
-                    
-                    if (primeiroPt && turf.booleanPointInPolygon(turf.point(primeiroPt), munFeature)) {
-                        linhasAfetadasList.push(infovia);
-                    }
-                } catch (err) {
-                    console.error("Erro na verificação espacial da infovia:", err);
-                }
-            });
-
             // Adicionar o polígono de limite municipal ao mapa com visual de destaque achurado sutil
             L.geoJSON(munFeature, {
                 className: 'leaflet-polygon-achurado', // Aplica a textura no CSS
@@ -458,15 +437,11 @@
         } else {
             // ================= MODO A: FILTRO DE PROXIMIDADE (BUFFER) =================
             // 1. Filtrar as linhas de infovia selecionadas
-            let linhasParaBuffer = [];
-            if (infoviaSelecionada === "all") {
-                linhasParaBuffer = dataLinhas.features;
-            } else {
-                linhasParaBuffer = dataLinhas.features.filter(f => f.properties.KML_FOLDER === infoviaSelecionada);
-            }
+            const linhasParaBuffer = clipped.lines;
 
             if (linhasParaBuffer.length === 0) {
-                console.warn("Nenhuma linha de infovia selecionada para gerar buffer.");
+                totalPopEst = totalDomEst = setoresAfetadosEst = popCapitalEst = popInteriorEst = domCapitalEst = domInteriorEst = 0;
+                console.warn("Nenhum trecho de infovia dentro do território.");
                 atualizarEstatisticasSidebar([], 0);
                 atualizarListaSidebar([]);
                 return;
@@ -476,7 +451,7 @@
             const featureCollectionLinhas = turf.featureCollection(linhasParaBuffer);
 
             // 1.5. Combinar as linhas em uma única geometria MultiLineString para dissolver buffers sobrepostos
-            const bufferGeoJSON = await calcularBuffer(featureCollectionLinhas, raioKm);
+            const bufferGeoJSON = await calcularBuffer(featureCollectionLinhas, raioKm, clipped.boundary);
             if (revision !== analysisRevision) return;
 
             // 3. Adicionar o polígono de buffer ao mapa com estilização suave e moderna (Glassmorphism cian)
@@ -663,32 +638,17 @@
             return null;
         }
         
-        let linhasParaCalcular = [];
-        
-        if (modoMunicipal) {
-            linhasParaCalcular = (linhasAfetadasList && linhasAfetadasList.length > 0)
-                ? linhasAfetadasList
-                : dataLinhas.features;
-        } else {
-            if (infoviaSelecionada !== "all") {
-                linhasParaCalcular = dataLinhas.features.filter(f => f.properties.KML_FOLDER === infoviaSelecionada);
-            } else {
-                linhasParaCalcular = dataLinhas.features;
-            }
-        }
-        
-        if (linhasParaCalcular.length === 0) {
-            linhasParaCalcular = dataLinhas.features;
-        }
-        
+        const linhasParaCalcular = window.TerritorialRoutes.current.lines;
+        if (!linhasParaCalcular.length) return null;
+
         let menorDistancia = Infinity;
         
         linhasParaCalcular.forEach(infovia => {
             try {
-                const dist = turf.pointToLineDistance(localidade.geometry, infovia.geometry, { units: 'kilometers' });
-                if (dist < menorDistancia) {
-                    menorDistancia = dist;
-                }
+                turf.flattenEach(infovia, part => {
+                    const dist = turf.pointToLineDistance(localidade.geometry, part.geometry, {units:'kilometers'});
+                    menorDistancia = Math.min(menorDistancia, dist);
+                });
             } catch (err) {
                 // Silencioso
             }
@@ -730,7 +690,12 @@
 
         if (statTotal) statTotal.textContent = total.toLocaleString('pt-BR');
 
-        // Atualizar estatísticas demográficas na Sidebar com desdobramento Capital/Interior
+        const demographicContext = document.getElementById('demografia-contexto');
+        if (demographicContext) demographicContext.textContent = code !== 'all'
+            ? 'Totais de população e domicílios do município selecionado, conforme a base municipal.'
+            : 'Estimativa pela soma integral dos setores censitários cujo centroide está no buffer. Inclui partes dos setores fora da faixa; não é uma contagem exata dentro da área.';
+
+        // Referência demográfica separada dos indicadores de localidades.
         if (totalPopEst > 0 || totalDomEst > 0) {
             if (statPop) statPop.textContent = totalPopEst.toLocaleString('pt-BR');
             if (statPopSub) {
@@ -967,7 +932,7 @@
                     
                     const infoviaNome = feature.properties.KML_FOLDER;
                     
-                    if (infoviaNome && selectInfovia) {
+                    if (infoviaNome && selectInfovia && [...selectInfovia.options].some(option => option.value === infoviaNome)) {
                         // Sincronizar selectbox lateral
                         selectInfovia.value = infoviaNome;
                         console.log(`Seleção Linear ativada para infovia: ${infoviaNome}`);
@@ -991,7 +956,8 @@
         if (municipio) { municipio.value = 'all'; municipio.disabled = true; }
         window.dispatchEvent(new Event('analysis-reset'));
         if (selectInfovia)     selectInfovia.value     = "all";
-        if (selectUF)          selectUF.value          = "all";  // MELHORIA 4.2
+        if (selectUF)          selectUF.value          = "all";
+        window.preencherFiltroInfovias?.(window.geoportalData.infovias);  // MELHORIA 4.2
         if (selectCategoriaCt) selectCategoriaCt.value = "all";  // Reseta Categoria Censo
         if (sliderDistancia) {
             sliderDistancia.value = 0;
@@ -999,10 +965,7 @@
         if (inputDistancia) {
             inputDistancia.value = 0;
         }
-        executarAnaliseEspacial();
-        
-        // Centralizar o mapa na visão geral
-        enquadrarInfoviasNoMapa();
+        executarAnaliseEspacial().then(enquadrarInfoviasNoMapa);
     }
 
     // Enquadra a tela nas extensões das infovias selecionadas
@@ -1013,7 +976,8 @@
         if (!layerInfovias) return;
 
         if (infoviaSelecionada === "all") {
-            window.map.fitBounds(layerInfovias.getBounds(), { padding: [30, 30] });
+            const bounds = layerInfovias.getBounds();
+            if (bounds.isValid()) window.map.fitBounds(bounds, { padding: [30, 30] });
         } else {
             // Filtrar as sub-camadas (linhas individuais) que coincidem com a infovia selecionada
             const bounds = L.latLngBounds();

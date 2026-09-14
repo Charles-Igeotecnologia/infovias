@@ -6,7 +6,7 @@ from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
 ROOT = Path(__file__).resolve().parent
-PUBLIC_FILES = {'index.html', 'mapa.html', 'app.js', 'analysis.js', 'measure.js', 'professional.js', 'locality-model.js', 'territory-directory.js', 'spatial-worker.js', 'styles.css', 'data-catalog.json', 'logo_evereste.png', 'infovias.geojson', 'pontos_estrategicos.geojson', 'localidades.geojson', 'favicon.ico'}
+PUBLIC_FILES = {'index.html', 'mapa.html', 'app.js', 'analysis.js', 'measure.js', 'professional.js', 'locality-model.js', 'territory-directory.js', 'sidebar-layout.js', 'territorial-routes.js', 'infovia-territories.js', 'sidebar-layout.css', 'spatial-worker.js', 'styles.css', 'data-catalog.json', 'logo_evereste.png', 'infovias.geojson', 'pontos_estrategicos.geojson', 'localidades.geojson', 'favicon.ico'}
 PUBLIC_DIRS = {'municipios', 'setores_censitarios', 'localidades_por_uf'}
 
 class Handler(http.server.SimpleHTTPRequestHandler):
@@ -18,7 +18,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     def send_head(self):
         path = unquote(urlsplit(self.path).path).lstrip('/') or 'index.html'
         parts = path.split('/')
-        allowed = path in PUBLIC_FILES or (len(parts) == 2 and parts[0] in PUBLIC_DIRS and parts[1].endswith('.geojson'))
+        allowed = (len(parts) == 2 and parts[0] == 'territorial' and parts[1] in {'AM.json','PA.json','AP.json','RR.json'}) or path in PUBLIC_FILES or (len(parts) == 2 and parts[0] in PUBLIC_DIRS and parts[1].endswith('.geojson'))
         if not allowed or '..' in parts or '\\' in path:
             self.send_error(404)
             return None

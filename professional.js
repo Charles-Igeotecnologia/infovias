@@ -45,9 +45,13 @@
             const polygons = f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.type === 'MultiPolygon' ? f.geometry.coordinates : [];
             polygons.forEach(poly => paths += `<path d="${poly.map(ringPath).join(' ')}" fill="#cdebf6" fill-rule="evenodd" stroke="#16799b" stroke-width="1"/>`);
         });
+        for(const f of window.TerritorialRoutes?.current.lines || []) {
+            const lines=f.geometry.type==='LineString'?[f.geometry.coordinates]:f.geometry.coordinates;
+            for(const line of lines) paths+=`<path d="${line.map((c,i)=>(i?'L':'M')+point(c).join(',')).join(' ')}" fill="none" stroke="#7c3aed" stroke-width="1.5"/>`;
+        }
         const dots = features.map(f => { const [x,y] = point(f.geometry.coordinates); return `<circle cx="${x}" cy="${y}" r="2" fill="#b53629"/>`; }).join('');
         const km = (100 / scale * 6371 * Math.cos((bounds[1]+bounds[3])/2 * Math.PI/180)).toFixed(1);
-        return `<figure style="break-inside:avoid;margin:20px 0"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 410" role="img" aria-label="Área analisada e localidades selecionadas" style="width:100%;background:#f8fafc;border:1px solid #cbd5e1">${paths}${dots}<text x="675" y="24" text-anchor="middle" font-size="13">N ↑</text><path d="M25,365v6h100v-6" fill="none" stroke="#172838"/><text x="25" y="389" font-size="11">${km} km (aprox. no centro)</text><text x="250" y="389" font-size="11">Azul: área analisada • Vermelho: localidades</text></svg><figcaption>Esquema cartográfico da seleção em projeção Mercator. Sem mapa base. As feições refletem a versão local dos dados.</figcaption></figure>`;
+        return `<figure style="break-inside:avoid;margin:20px 0"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 410" role="img" aria-label="Área analisada e localidades selecionadas" style="width:100%;background:#f8fafc;border:1px solid #cbd5e1">${paths}${dots}<text x="675" y="24" text-anchor="middle" font-size="13">N ↑</text><path d="M25,365v6h100v-6" fill="none" stroke="#172838"/><text x="25" y="389" font-size="11">${km} km (aprox. no centro)</text><text x="250" y="389" font-size="11">Azul: área • Vermelho: localidades • Roxo: infovias</text></svg><figcaption>Esquema cartográfico da seleção em projeção Mercator. Sem mapa base. As feições refletem a versão local dos dados.</figcaption></figure>`;
     }
     const selected = id => { const el = byId(id); return el.options?.[el.selectedIndex]?.text || el.value; };
     function criteria() {
@@ -60,7 +64,7 @@
         byId('analysis-summary').textContent = criteria();
         byId('analysis-method').textContent = territorial
             ? 'Totais demográficos do município presentes na base. Localidades selecionadas por código municipal.'
-            : 'Estimativa: soma integral dos setores cujo centroide está no buffer. Não representa uma medição exata da população dentro da faixa.';
+            : 'Buffer gerado a partir do trecho territorial e recortado na divisa. Estimativa: soma integral dos setores cujo centroide está nesse buffer. Não representa uma medição exata da população dentro da faixa.';
     }
     mode.addEventListener('change', () => {
         municipality.value = 'all';
@@ -109,7 +113,7 @@
         countNote.textContent = `${universe.length.toLocaleString('pt-BR')} localidades consolidadas / ${rawCount.toLocaleString('pt-BR')} registros de origem no território e categoria. ` + (active ? `Mapa e relatório: ${results.length} localidades selecionadas; filtros de distância de contexto não se aplicam.` : 'Mapa de contexto: aplica os filtros de distância cadastrada de 50 km.');
 
         reportMap = buildReportMap(detail.area, results);
-        snapshot = {generatedAt: detail.generatedAt, criteria: criteria(), method: byId('analysis-method').textContent, count: results.length, catalog: 'data-catalog.json', stateLocalities: LocalityModel.territory(window.geoportalData.localidades?.features || [], byId('select-uf').value, 'all', 'all').length, stateName: selected('select-uf'), territorialLocalities: universe.length, territorialRecords: rawCount, capitalDefinition: 'Municípios das capitais, incluindo área rural'};
+        snapshot = {generatedAt: detail.generatedAt, criteria: criteria(), method: byId('analysis-method').textContent, count: results.length, routes: window.TerritorialRoutes?.current.summary || [], catalog: 'data-catalog.json', stateLocalities: LocalityModel.territory(window.geoportalData.localidades?.features || [], byId('select-uf').value, 'all', 'all').length, stateName: selected('select-uf'), territorialLocalities: universe.length, territorialRecords: rawCount, capitalDefinition: 'Municípios das capitais, incluindo área rural'};
         const current = snapshot; render();
         const catalog = await catalogPromise;
         if (snapshot !== current) return;
@@ -122,7 +126,7 @@
         const url = URL.createObjectURL(new Blob([JSON.stringify(snapshot, null, 2)], {type:'application/json'}));
         const a = document.createElement('a'); a.href = url; a.download = 'registro-analise.json'; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
     });
-    window.analysisAuditHTML = () => snapshot ? `<section style="padding:24px;border-bottom:1px solid #ccc"><h2>Registro da análise</h2><p>${escape(snapshot.criteria)}</p><p>${escape(snapshot.method)}</p><p>Referência estadual — ${escape(snapshot.stateName)}: ${snapshot.stateLocalities} localidades de todos os municípios e categorias.</p><p>Território e categoria: ${snapshot.territorialLocalities} localidades consolidadas, ${snapshot.territorialRecords} registros de origem. Seleção: ${snapshot.count} localidades.</p><p>Gerado em ${escape(snapshot.generatedAt)}. Capital: município completo, incluindo área rural. Setores: recorte de 50 km. Categorias filtram localidades, não a demografia.</p>${reportMap}<details><summary>Versões dos dados (SHA-256)</summary>${(snapshot.datasets || []).map(d => `<p style="font-size:9px;overflow-wrap:anywhere">${escape(d.path)}: ${escape(d.sha256)}</p>`).join('')}</details></section>` : '';
+    window.analysisAuditHTML = () => snapshot ? `<section style="padding:24px;border-bottom:1px solid #ccc"><h2>Registro da análise</h2><p>${escape(snapshot.criteria)}</p><p>${escape(snapshot.method)}</p><p>Referência estadual — ${escape(snapshot.stateName)}: ${snapshot.stateLocalities} localidades de todos os municípios e categorias.</p><p>Território e categoria: ${snapshot.territorialLocalities} localidades consolidadas, ${snapshot.territorialRecords} registros de origem. Seleção: ${snapshot.count} localidades.</p><p>Gerado em ${escape(snapshot.generatedAt)}. Capital: município completo, incluindo área rural. Setores: recorte de 50 km. Categorias filtram localidades, não a demografia.</p>${reportMap}<h3>Extensão das infovias</h3>${(snapshot.routes || []).map(r=>`<p>${escape(r.name)}: ${r.territoryKm.toFixed(2)} km no território; ${r.totalKm.toFixed(2)} km totais na base; ${r.borderKm.toFixed(3)} km coincidentes com divisa.</p>`).join('')}<p>Trechos na divisa podem constar nos dois territórios. Não somar extensões territoriais para obter a extensão regional. Recortes conforme a malha local; comprimentos geodésicos WGS 84.</p><details><summary>Versões dos dados (SHA-256)</summary>${(snapshot.datasets || []).map(d => `<p style="font-size:9px;overflow-wrap:anywhere">${escape(d.path)}: ${escape(d.sha256)}</p>`).join('')}</details></section>` : '';
     const style = document.createElement('style');
     style.textContent = '[hidden]{display:none!important} #analysis-summary,#analysis-status{font-size:12px;line-height:1.6} details p{font-size:12px;line-height:1.6} summary{cursor:pointer;padding:10px 0} :focus-visible{outline:3px solid #00bcd4;outline-offset:3px} table{width:100%;font-size:11px;border-collapse:collapse} th,td{padding:8px;text-align:left;border-bottom:1px solid #64748b55} td button{color:inherit;background:transparent;border:0;text-align:left;cursor:pointer;text-decoration:underline}';
     document.head.append(style); sync(); render();

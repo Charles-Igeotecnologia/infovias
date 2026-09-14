@@ -1,0 +1,53 @@
+:root{--analysis-width:420px;--analysis-offset:16px}
+:root.wide-analysis-panel{--analysis-width:520px}
+#sidebar{width:min(var(--analysis-width),calc(100vw - 56px));right:var(--analysis-offset);top:16px;bottom:16px;padding:18px;gap:12px;overflow:hidden;max-height:none}
+#sidebar>*{min-width:0;flex-shrink:0}
+#sidebar .sidebar-header{padding-bottom:10px}
+#sidebar .sidebar-header h2{font-size:17px}
+#sidebar .sidebar-header p{font-size:10px;margin-top:4px}
+.panel-toolbar{display:flex;align-items:center;justify-content:space-between;font-size:11px;color:#b5c5d4}
+.panel-toolbar button{border:1px solid #405469;background:#182a3a;color:#d4e6f2;padding:6px 9px;border-radius:6px;cursor:pointer;font-size:11px}
+.panel-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;padding:4px;border-radius:8px;background:#0b1722}
+.panel-tabs button{padding:10px 4px;border:0;border-radius:6px;background:transparent;color:#b7c8d8;font-size:12px;cursor:pointer}
+.panel-tabs button[aria-selected=true]{background:#254354;color:#a2f0fc;font-weight:600}
+#sidebar .panel-body{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;scrollbar-gutter:stable;padding-right:5px}
+.panel-body [role=tabpanel]{min-width:0}
+#sidebar .sidebar-section{margin:0 0 14px;padding:14px;min-width:0;flex-shrink:0}
+#sidebar .sidebar-section h3{font-size:13px;margin-bottom:12px}
+#sidebar .control-group{margin-bottom:12px}
+#sidebar label{font-size:12px;line-height:1.5}
+#sidebar .custom-select{font-size:12px;min-height:38px;width:100%;min-width:0}
+#sidebar .stats-container{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+#sidebar .stat-card{min-width:0;padding:12px;text-align:left}
+#sidebar .stat-card .label{font-size:11px!important;line-height:1.5;white-space:normal;overflow-wrap:anywhere}
+#sidebar .stat-card .value{font-size:21px!important;line-height:1.4}
+#sidebar .stat-pct{font-size:11px!important;line-height:1.5;white-space:normal}
+#sidebar #stat-total-pct{color:#b5cadc}
+#sidebar .stats-container>.stat-card:nth-child(3):last-child{grid-column:1/-1}
+#sidebar #demografia-container .stats-container>.stat-card{grid-column:auto}
+#sidebar #analysis-summary{font-size:12px;line-height:1.6}
+#sidebar .action-btn{font-size:12px;padding:10px;min-height:38px;white-space:normal}
+#sidebar table{table-layout:fixed;font-size:12px;width:100%}
+#sidebar th,#sidebar td{overflow-wrap:anywhere;word-break:normal;vertical-align:top;padding:9px 6px}
+#sidebar summary{font-size:12px;line-height:1.5;padding:10px 0;cursor:pointer}
+#sidebar .impact-results-list{max-height:320px}
+#sidebar-toggle{right:calc(min(var(--analysis-width),calc(100vw - 56px)) + var(--analysis-offset));}
+#sidebar-toggle.collapsed{right:16px}
+#custom-measure-results{right:calc(var(--analysis-width) + 40px)}
+@media(min-width:1000px){#custom-measure-bar{left:calc((100vw - var(--analysis-width) - 32px)/2);max-width:calc(100vw - var(--analysis-width) - 80px)}}
+@media(max-width:650px){#sidebar{padding:12px;top:8px;bottom:8px;right:8px;gap:9px}#sidebar-toggle{right:calc(min(var(--analysis-width),calc(100vw - 56px)) + 8px)}#sidebar-toggle.collapsed{right:8px}#panel-width{display:none}#sidebar .sidebar-section{padding:10px}#sidebar .stat-card .value{font-size:18px!important}}
+
+#sidebar .composition-stats{grid-template-columns:repeat(3,minmax(0,1fr))!important}
+#sidebar .composition-stats>.stat-card:nth-child(3):last-child{grid-column:auto}
+@media(max-width:650px){#sidebar{z-index:1020}#sidebar-toggle{z-index:1025}}
+
+/* Referência contextual, visualmente subordinada aos indicadores. */
+.demographic-reference { margin: 8px 0 20px; padding: 16px 0 0; border-top: 1px solid var(--border-glass); color: var(--text-muted); }
+.demographic-reference h4 { margin: 0 0 8px; font-size: 12px; font-weight: 600; }
+.demographic-reference p { font-size: 12px; line-height: 1.6; margin: 8px 0; }
+.demographic-values { margin: 12px 0; display: grid; gap: 12px; }
+.demographic-values > div { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; font-size: 12px; }
+.demographic-values dt, .demographic-values dd { margin: 0; }
+.demographic-values dd[id$="-sub"] { grid-column: 1 / -1; font-size: 11px; line-height: 1.5; }
+.demographic-values strong { font-weight: 400; }
+.demographic-caveat { border-left: 2px solid var(--border-glass); padding-left: 10px; }

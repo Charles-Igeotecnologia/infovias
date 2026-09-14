@@ -17,6 +17,7 @@
     
     <!-- Estilo Customizado -->
     <link rel="stylesheet" href="styles.css?v=3.0.0" />
+<link rel="stylesheet" href="sidebar-layout.css">
 </head>
 <body>
 
@@ -307,22 +308,15 @@
                 </div>
             </div>
 
-            <!-- Seção 2.5: Impacto Demográfico dos Setores (Censo 2022) -->
-            <div id="demografia-container" class="chart-container" style="margin-top: 15px; display: none;">
-                <div class="chart-title"><i class="fa-solid fa-users" style="color: #b927fc;"></i> Estimativa Demográfica (Censo 2022)</div>
-                <div class="stats-container" style="grid-template-columns: 1fr 1fr; gap: 8px;">
-                    <div class="stat-card" style="border-left: 3px solid #b927fc; text-align: left;" title="População Residente Estimada nos Setores Censitários">
-                        <span class="label" style="font-size: 9px; text-align: left; padding-left: 2px;">População Est.</span>
-                        <span id="stat-populacao" class="value" style="font-size: 15px; text-align: left; padding-left: 2px; color: #b927fc;">0</span>
-                        <span id="stat-populacao-sub" class="stat-pct" style="font-size: 8px; text-align: left; padding-left: 2px; line-height: 1.2;">habitantes</span>
-                    </div>
-                    <div class="stat-card" style="border-left: 3px solid var(--accent-cyan); text-align: left;" title="Total de Domicílios nos Setores Censitários">
-                        <span class="label" style="font-size: 9px; text-align: left; padding-left: 2px;">Domicílios Est.</span>
-                        <span id="stat-domicilios" class="value" style="font-size: 15px; text-align: left; padding-left: 2px; color: #00d2ff;">0</span>
-                        <span id="stat-domicilios-sub" class="stat-pct" style="font-size: 8px; text-align: left; padding-left: 2px; line-height: 1.2;">residências</span>
-                    </div>
-                </div>
-            </div>
+            <aside id="demografia-container" class="demographic-reference" aria-labelledby="demografia-title" style="display: none;">
+                <h4 id="demografia-title">Referência demográfica · Censo 2022</h4>
+                <p id="demografia-contexto"></p>
+                <dl class="demographic-values">
+                    <div><dt>População de referência</dt><dd id="stat-populacao">0</dd><dd id="stat-populacao-sub">habitantes</dd></div>
+                    <div><dt>Domicílios de referência</dt><dd id="stat-domicilios">0</dd><dd id="stat-domicilios-sub">domicílios</dd></div>
+                </dl>
+                <p class="demographic-caveat">Informação contextual: não representa a população atendida ou impactada pela infovia. O filtro de categoria de localidades não altera estes totais.</p>
+            </aside>
 
             <!-- DETALHAMENTO DE CATEGORIAS DO CENSO (CT) COLAPSÁVEL -->
             <div id="ct-breakdown-container" class="ct-breakdown-container" style="display: none;">
@@ -385,10 +379,13 @@
 
     <!-- Scripts da Aplicação (Organizados por Responsabilidade) -->
     <script src="locality-model.js"></script>
+    <script src="infovia-territories.js"></script>
     <script src="app.js?v=3.2.0"></script>
     <script src="measure.js?v=3.2.0"></script>
     <script src="professional.js"></script>
     <script src="territory-directory.js"></script>
+    <script src="territorial-routes.js"></script>
     <script src="analysis.js?v=3.2.0"></script>
+    <script src="sidebar-layout.js"></script>
 </body>
 </html>
