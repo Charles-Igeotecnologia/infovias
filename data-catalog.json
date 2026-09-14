@@ -1,0 +1,290 @@
+{
+  "schemaVersion": 1,
+  "datasets": [
+    {
+      "path": "infovias.geojson",
+      "sha256": "5a1407231b3d147c83b1ed28dc11b22129bab4c650212727de9d84246471246a",
+      "bytes": 1455622,
+      "features": 66,
+      "bbox": [
+        -72.66953271822592,
+        -8.764282380912116,
+        -48.49924180094105,
+        2.806608101914494
+      ],
+      "geometryTypes": [
+        "LineString"
+      ],
+      "source": "Origem e transformações pendentes de documentação",
+      "referencePeriod": "Referência demográfica declarada: Censo 2022; verificar fonte",
+      "crs": {
+        "type": "name",
+        "properties": {
+          "name": "urn:ogc:def:crs:OGC:1.3:CRS84"
+        }
+      }
+    },
+    {
+      "path": "pontos_estrategicos.geojson",
+      "sha256": "089bebecb84c92fefa480cb2e131e764c6443db7421ad335ae979c55c6428ff2",
+      "bytes": 13534,
+      "features": 61,
+      "bbox": [
+        -72.58089110307628,
+        -8.764100541155454,
+        -48.49907077149634,
+        2.824100095867476
+      ],
+      "geometryTypes": [
+        "Point"
+      ],
+      "source": "Origem e transformações pendentes de documentação",
+      "referencePeriod": "Referência demográfica declarada: Censo 2022; verificar fonte",
+      "crs": {
+        "type": "name",
+        "properties": {
+          "name": "urn:ogc:def:crs:OGC:1.3:CRS84"
+        }
+      }
+    },
+    {
+      "path": "localidades_por_uf/localidades_AM.geojson",
+      "sha256": "8bc39e3261e5e3e59ceea141ae5740ef70de19605578fa7e89a4fd604b1c2f2f",
+      "bytes": 3810120,
+      "features": 4357,
+      "bbox": [
+        -73.0513222324497,
+        -9.489714799693273,
+        -56.44301159,
+        1.978057599934927
+      ],
+      "geometryTypes": [
+        "Point"
+      ],
+      "source": "Origem e transformações pendentes de documentação",
+      "referencePeriod": "Referência demográfica declarada: Censo 2022; verificar fonte",
+      "crs": {
+        "type": "name",
+        "properties": {
+          "name": "urn:ogc:def:crs:OGC:1.3:CRS84"
+        }
+      }
+    },
+    {
+      "path": "localidades_por_uf/localidades_AP.geojson",
+      "sha256": "c5f915cd1a5ad8be8077b5d88990e87d7c543508799a34e73cc5b865a7f4b51a",
+      "bytes": 518601,
+      "features": 597,
+      "bbox": [
+        -53.1941866388888,
+        -1.123377096901794,
+        -49.9073354,
+        4.132939187364474
+      ],
+      "geometryTypes": [
+        "Point"
+      ],
+      "source": "Origem e transformações pendentes de documentação",
+      "referencePeriod": "Referência demográfica declarada: Censo 2022; verificar fonte",
+      "crs": {
+        "type": "name",
+        "properties": {
+          "name": "urn:ogc:def:crs:OGC:1.3:CRS84"
+        }
+      }
+    },
+    {
+      "path": "localidades_por_uf/localidades_PA.geojson",
+      "sha256": "d1eea54c7548d286c163b3960e4020e78d34aec8d1d12959ba29ecdaa49ccd37",
+      "bytes": 4146334,
+      "features": 4838,
+      "bbox": [
+        -58.8671425065038,
+        -9.674754333020854,
+        -46.1011941744186,
+        2.310317225506997
+      ],
+      "geometryTypes": [
+        "Point"
+      ],
+      "source": "Origem e transformações pendentes de documentação",
+      "referencePeriod": "Referência demográfica declarada: Censo 2022; verificar fonte",
+      "crs": {
+        "type": "name",
+        "properties": {
+          "name": "urn:ogc:def:crs:OGC:1.3:CRS84"
+        }
+      }
+    },
+    {
+      "path": "localidades_por_uf/localidades_RR.geojson",
+      "sha256": "6aac536174d7fd455c19e3a4c3f18a5281147dfb4143cf78e1fdae9f8db0d357",
+      "bytes": 1206419,
+      "features": 1394,
+      "bbox": [
+        -66.62768,
+        -1.404966521692892,
+        -59.15093,
+        5.154111199831225
+      ],
+      "geometryTypes": [
+        "Point"
+      ],
+      "source": "Origem e transformações pendentes de documentação",
+      "referencePeriod": "Referência demográfica declarada: Censo 2022; verificar fonte",
+      "crs": {
+        "type": "name",
+        "properties": {
+          "name": "urn:ogc:def:crs:OGC:1.3:CRS84"
+        }
+      }
+    },
+    {
+      "path": "municipios/municipios_AM.geojson",
+      "sha256": "8dfee6c365be13a5e0b58290ee7d05e2f816db480290f2d919e1d72c1a515c60",
+      "bytes": 1542293,
+      "features": 62,
+      "bbox": [
+        -73.80155809999997,
+        -9.818045899999959,
+        -56.09374064599996,
+        2.24663060000006
+      ],
+      "geometryTypes": [
+        "MultiPolygon",
+        "Polygon"
+      ],
+      "source": "Origem e transformações pendentes de documentação",
+      "referencePeriod": "Referência demográfica declarada: Censo 2022; verificar fonte",
+      "crs": "Não declarado; coordenadas verificadas somente quanto aos limites geográficos"
+    },
+    {
+      "path": "municipios/municipios_AP.geojson",
+      "sha256": "1aba195483b5a201f1c7a28aab198a782d390d1c7a283067bbaaa72176f26033",
+      "bytes": 299028,
+      "features": 16,
+      "bbox": [
+        -54.87625019999996,
+        -1.2359840999999392,
+        -49.875838699999974,
+        4.508817100000044
+      ],
+      "geometryTypes": [
+        "MultiPolygon",
+        "Polygon"
+      ],
+      "source": "Origem e transformações pendentes de documentação",
+      "referencePeriod": "Referência demográfica declarada: Censo 2022; verificar fonte",
+      "crs": "Não declarado; coordenadas verificadas somente quanto aos limites geográficos"
+    },
+    {
+      "path": "municipios/municipios_PA.geojson",
+      "sha256": "9b45398d7ada01c912be2e1a24f9b9e843a40b6cedb002e800a14f216d918e82",
+      "bytes": 1508818,
+      "features": 144,
+      "bbox": [
+        -58.89832839999997,
+        -9.841153499999962,
+        -46.06142479999994,
+        2.5910270000000537
+      ],
+      "geometryTypes": [
+        "MultiPolygon",
+        "Polygon"
+      ],
+      "source": "Origem e transformações pendentes de documentação",
+      "referencePeriod": "Referência demográfica declarada: Censo 2022; verificar fonte",
+      "crs": "Não declarado; coordenadas verificadas somente quanto aos limites geográficos"
+    },
+    {
+      "path": "municipios/municipios_RR.geojson",
+      "sha256": "4f02885bd9e85a527fdd3fb42dfcf8a0d2be1025454e06d94ac01c5068ff6b68",
+      "bytes": 302790,
+      "features": 15,
+      "bbox": [
+        -64.82525369999996,
+        -1.5806330999999432,
+        -58.886884399999985,
+        5.271841100000074
+      ],
+      "geometryTypes": [
+        "Polygon"
+      ],
+      "source": "Origem e transformações pendentes de documentação",
+      "referencePeriod": "Referência demográfica declarada: Censo 2022; verificar fonte",
+      "crs": "Não declarado; coordenadas verificadas somente quanto aos limites geográficos"
+    },
+    {
+      "path": "setores_censitarios/setores_AM_50km.geojson",
+      "sha256": "ec3fdb8849d34e46b6d6372b8a5d037e3097c570ce3fc1081539e37a63ecf2c5",
+      "bytes": 9006912,
+      "features": 9646,
+      "bbox": [
+        -73.07454,
+        -9.15444,
+        -56.09374,
+        0.68894
+      ],
+      "geometryTypes": [
+        "Polygon"
+      ],
+      "source": "Origem e transformações pendentes de documentação",
+      "referencePeriod": "Referência demográfica declarada: Censo 2022; verificar fonte",
+      "crs": "Não declarado; coordenadas verificadas somente quanto aos limites geográficos"
+    },
+    {
+      "path": "setores_censitarios/setores_AP_50km.geojson",
+      "sha256": "e959e1a71bfdb932d08dc2d65536a5cae1ebb9cbb479b32e43e5ee0f941943a4",
+      "bytes": 632199,
+      "features": 1009,
+      "bbox": [
+        -52.34697,
+        -1.23618,
+        -50.64482,
+        0.60675
+      ],
+      "geometryTypes": [
+        "Polygon"
+      ],
+      "source": "Origem e transformações pendentes de documentação",
+      "referencePeriod": "Referência demográfica declarada: Censo 2022; verificar fonte",
+      "crs": "Não declarado; coordenadas verificadas somente quanto aos limites geográficos"
+    },
+    {
+      "path": "setores_censitarios/setores_PA_50km.geojson",
+      "sha256": "c514c6d473744290d20af3f94c00123c7b992fffa680d544284c8c86c37ff73f",
+      "bytes": 4769029,
+      "features": 6880,
+      "bbox": [
+        -56.77041,
+        -2.987,
+        -48.01151,
+        0.24936
+      ],
+      "geometryTypes": [
+        "Polygon"
+      ],
+      "source": "Origem e transformações pendentes de documentação",
+      "referencePeriod": "Referência demográfica declarada: Censo 2022; verificar fonte",
+      "crs": "Não declarado; coordenadas verificadas somente quanto aos limites geográficos"
+    },
+    {
+      "path": "setores_censitarios/setores_RR_50km.geojson",
+      "sha256": "e39e8203f14b8c59009b84ceafaec2ba35e589dc9a1508f7faf61b2763d02c3f",
+      "bytes": 786137,
+      "features": 896,
+      "bbox": [
+        -62.53829,
+        -1.58063,
+        -60.18923,
+        3.37213
+      ],
+      "geometryTypes": [
+        "Polygon"
+      ],
+      "source": "Origem e transformações pendentes de documentação",
+      "referencePeriod": "Referência demográfica declarada: Censo 2022; verificar fonte",
+      "crs": "Não declarado; coordenadas verificadas somente quanto aos limites geográficos"
+    }
+  ]
+}

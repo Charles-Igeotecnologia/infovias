@@ -13,3 +13,4 @@ Desktop.ini
 !setores_censitarios/*.geojson
 !municipios/*.geojson
 
+!localidades_por_uf/*.geojson

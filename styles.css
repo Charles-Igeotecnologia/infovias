@@ -1557,3 +1557,18 @@ input:checked + .slider:before {
 .leaflet-polygon-achurado {
     fill: url(#achura-diagonal) !important;
 }
+
+/* Ajustes de leitura e adaptação do ambiente de análise */
+:root { --text-muted: #afb8c6; --bg-dark: rgba(18, 25, 35, .96); }
+#sidebar { background: rgba(18, 25, 35, .97); }
+.legend-content { max-height: 185px; overflow-y: auto; }
+#analysis-summary { color: #b9e8f5; margin-top: 10px; }
+#analysis-status { padding: 8px 0; }
+#analysis-mode { margin-top: 6px; }
+#results-search { margin: 8px 0; }
+@media (max-width: 760px) {
+    #sidebar { width: min(360px, calc(100vw - 48px)); right: 8px; top: 8px; max-height: calc(100dvh - 16px); }
+    #floating-menu { max-width: 190px; left: 8px; top: 70px; }
+    .legend-content { max-height: 100px; }
+    .custom-measure-bar { max-width: calc(100vw - 24px); }
+}

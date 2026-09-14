@@ -192,11 +192,59 @@
     }
 
     // Executa o processamento espacial usando Turf.js
-    async function executarAnaliseEspacial() {
+    let bufferWorker = null;
+    let cancelBuffer = null;
+    function calcularBuffer(lines, radius) {
+        return new Promise((resolve, reject) => {
+            const worker = new Worker('spatial-worker.js');
+            bufferWorker = worker;
+            const timeout = setTimeout(() => finish(new Error('O cálculo excedeu 60 segundos. Reduza a seleção de infovias.')), 60000);
+            function finish(error, result) {
+                clearTimeout(timeout); worker.terminate();
+                if (bufferWorker === worker) { bufferWorker = null; cancelBuffer = null; }
+                if (error) reject(error); else resolve(result);
+            }
+            cancelBuffer = () => finish(new Error('Análise substituída por novos critérios.'));
+            worker.onmessage = ({data}) => finish(data.error ? new Error(data.error) : null, data.result);
+            worker.onerror = () => finish(new Error('Falha ao iniciar o cálculo espacial. Verifique a conexão e tente novamente.'));
+            worker.postMessage({lines, radius});
+        });
+    }
+    let analysisRevision = 0;
+    let analysisQueue = Promise.resolve();
+    function executarAnaliseEspacial() {
+        const revision = ++analysisRevision;
+        if (cancelBuffer) cancelBuffer();
+        window.dispatchEvent(new CustomEvent('analysis-status', {detail: {state: 'loading'}}));
+        if (btnExport) btnExport.disabled = true;
+        if (btnReport) btnReport.disabled = true;
+        analysisQueue = analysisQueue.catch(() => {}).then(async () => {
+            if (revision !== analysisRevision) return;
+            try {
+                await processarAnaliseEspacial(revision);
+                if (revision !== analysisRevision) return;
+                window.dispatchEvent(new CustomEvent('analysis-results', {detail: {
+                    features: localidadesAfetadasList, area: activeBufferLayer.toGeoJSON(), generatedAt: new Date().toISOString()
+                }}));
+                window.dispatchEvent(new CustomEvent('analysis-status', {detail: {state: 'ready'}}));
+            } catch (error) {
+                if (revision !== analysisRevision) return;
+                limparCamadaBuffer();
+                localidadesAfetadasList = [];
+                atualizarEstatisticasSidebar([], 0);
+                atualizarListaSidebar([]);
+                if (demoContainer) demoContainer.style.display = 'none';
+                window.dispatchEvent(new CustomEvent('analysis-status', {detail: {state: 'error', message: error.message}}));
+                console.error(error);
+            }
+        });
+        return analysisQueue;
+    }
+    async function processarAnaliseEspacial(revision) {
         const infoviaSelecionada = selectInfovia ? selectInfovia.value : "all";
         const ufSelecionada = selectUF ? selectUF.value : "all";
         const categoriaSelecionada = selectCategoriaCt ? selectCategoriaCt.value : "all";
-        const raioKm = sliderDistancia ? parseFloat(sliderDistancia.value) : 0;      
+        let raioKm = sliderDistancia ? parseFloat(sliderDistancia.value) : 0;
         
         // Filtrar visualmente as bolinhas no mapa de acordo com o estado e categoria selecionados
         if (window.filtrarLocalidadesNoMapa) {
@@ -237,15 +285,28 @@
             return;
         }
 
+        // Garantir que as localidades das UFs necessárias estejam carregadas antes de rodar os cruzamentos espaciais
+        const ufsParaCarregarLocalidades = ufSelecionada === "all" ? ["AM", "PA", "AP", "RR"] : [ufSelecionada];
+        if (window.carregarLocalidadesEstado) {
+            const promessasLocalidades = ufsParaCarregarLocalidades.map(async (uf) => {
+                if (window.ufCarregandoStatus[uf] !== 'loaded') {
+                    await window.carregarLocalidadesEstado(uf);
+                }
+            });
+            await Promise.all(promessasLocalidades);
+            if (revision !== analysisRevision) return;
+            if (ufsParaCarregarLocalidades.some(uf => window.ufCarregandoStatus[uf] !== 'loaded')) throw new Error('Não foi possível carregar todas as localidades. Tente novamente.');
+        }
+
+        if (revision !== analysisRevision) return;
         const dataLinhas = window.geoportalData.infovias;
         const dataPontos = window.geoportalData.localidades;
 
-        if (!dataLinhas || !dataPontos) {
-            console.warn("Aguardando carregamento completo dos dados GeoJSON.");
-            return;
+        if (!dataLinhas || !dataPontos || !dataPontos.features || dataPontos.features.length === 0) {
+            throw new Error("Dados de infovias ou localidades indisponíveis. Recarregue a página.");
         }
 
-        console.time("Processamento Turf.js");
+        const processingStarted = performance.now();
 
         if (modoMunicipal) {
             // ================= MODO B: FILTRO TERRITORIAL MUNICIPAL =================
@@ -264,14 +325,15 @@
                 }
             }
 
+            if (revision !== analysisRevision) return;
+            if (!window._setoresCache[uf]) throw new Error('Base de setores indisponível. Tente novamente.');
             const munData = window._municipiosCache[uf];
             if (!munData || !munData.features) {
-                console.warn("Aguardando carregamento da malha de municípios da UF.");
-                return;
+                throw new Error("Malha municipal indisponível. Selecione novamente o estado.");
             }
 
             const munFeature = munData.features.find(f => String(f.properties.CD_MUN) === String(cdMunSelecionado));
-            if (!munFeature) return;
+            if (!munFeature) throw new Error("Município não encontrado na base selecionada.");
 
             // 1. Obter dados demográficos totais reais oficiais do IBGE para o município
             totalPopEst = munFeature.properties.POPULACAO_REAL || 0;
@@ -284,12 +346,11 @@
 
             const CODIGOS_CAPITAIS = ["1302603", "1501402", "1600303", "1400100"];
             if (CODIGOS_CAPITAIS.includes(String(cdMunSelecionado))) {
-                // Se for capital: a população e os domicílios urbanos reais são classificados como Capital,
-                // enquanto os rurais são classificados como Interior!
-                popCapitalEst = munFeature.properties.POP_URBANA_REAL || 0;
-                domCapitalEst = munFeature.properties.DOM_URBANO_REAL || 0;
-                popInteriorEst = munFeature.properties.POP_RURAL_REAL || 0;
-                domInteriorEst = munFeature.properties.DOM_RURAL_REAL || 0;
+                // Capital corresponde a todo o município, incluindo setores rurais.
+                popCapitalEst = totalPopEst;
+                domCapitalEst = totalDomEst;
+                popInteriorEst = 0;
+                domInteriorEst = 0;
             } else {
                 // Se for município do interior: 100% da demografia vai para Interior!
                 popCapitalEst = 0;
@@ -391,7 +452,7 @@
             // Injetar o padrão SVG de achuras no mapa
             inicializarPadraoAchura();
 
-            console.timeEnd("Processamento Turf.js");
+            console.log(`Processamento espacial: ${(performance.now() - processingStarted).toFixed(0)} ms`);
             console.log(`Análise Territorial de Município concluída: ${localidadesAfetadasList.length} comunidades. Demografia: ${totalPopEst} hab., ${totalDomEst} dom.`);
 
             // Atualizar sidebar e lista
@@ -419,11 +480,8 @@
             const featureCollectionLinhas = turf.featureCollection(linhasParaBuffer);
 
             // 1.5. Combinar as linhas em uma única geometria MultiLineString para dissolver buffers sobrepostos
-            const combinadas = turf.combine(featureCollectionLinhas);
-            const linhaCombinada = combinadas.features[0];
-
-            // 2. Gerar o polígono de Buffer unificado (dissolvido) ao redor das linhas combinadas
-            const bufferGeoJSON = turf.buffer(linhaCombinada, raioKm, { units: 'kilometers' });
+            const bufferGeoJSON = await calcularBuffer(featureCollectionLinhas, raioKm);
+            if (revision !== analysisRevision) return;
 
             // 3. Adicionar o polígono de buffer ao mapa com estilização suave e moderna (Glassmorphism cian)
             L.geoJSON(bufferGeoJSON, {
@@ -505,6 +563,8 @@
             });
 
             await Promise.all(promessasSetores);
+            if (revision !== analysisRevision) return;
+            if (ufsParaCarregar.some(uf => !window._setoresCache[uf])) throw new Error('Base demográfica incompleta. Tente novamente.');
 
             // Processar cruzamento espacial contra os setores
             ufsParaCarregar.forEach(uf => {
@@ -514,7 +574,7 @@
                 setoresData.features.forEach(setor => {
                     let pontoRepresentativo;
                     try {
-                        pontoRepresentativo = turf.centroid(setor);
+                        pontoRepresentativo = setor._centroid || (setor._centroid = turf.centroid(setor));
                     } catch (e) {
                         const coords = setor.geometry.coordinates;
                         if (setor.geometry.type === "Polygon") {
@@ -533,7 +593,7 @@
                         const dom = parseInt(setor.properties.DOMICILIOS) || 0;
                         const cdMun = setor.properties.CD_MUN;
                         
-                        if (CODIGOS_CAPITAIS.includes(cdMun)) {
+                        if (CODIGOS_CAPITAIS.includes(String(cdMun))) {
                             popCapitalEst += pop;
                             domCapitalEst += dom;
                         } else {
@@ -548,7 +608,7 @@
                 });
             });
 
-            console.timeEnd("Processamento Turf.js");
+            console.log(`Processamento espacial: ${(performance.now() - processingStarted).toFixed(0)} ms`);
             console.log(`Análise concluída: ${localidadesAfetadasList.length} comunidades afetadas. Demografia: ${totalPopEst} hab., ${totalDomEst} dom. em ${setoresAfetadosEst} setores.`);
 
             // 5. Atualizar os cartões e a lista da Sidebar
@@ -822,7 +882,7 @@
         if (afetadas.length === 0) {
             impactList.innerHTML = `
                 <div class="content" style="color: var(--text-muted); text-align: center; padding: 20px 0; font-size: 12px;">
-                    Aumente o raio de proximidade para listar as comunidades impactadas ao redor das infovias.
+                    Nenhuma localidade selecionada. Confira o modo, o território, a categoria e a distância.
                 </div>
             `;
             return;
@@ -929,6 +989,9 @@
 
     // Reseta todos os filtros para o estado padrão
     function resetarFiltros() {
+        const municipio = document.getElementById('select-municipio');
+        if (municipio) { municipio.value = 'all'; municipio.disabled = true; }
+        window.dispatchEvent(new Event('analysis-reset'));
         if (selectInfovia)     selectInfovia.value     = "all";
         if (selectUF)          selectUF.value          = "all";  // MELHORIA 4.2
         if (selectCategoriaCt) selectCategoriaCt.value = "all";  // Reseta Categoria Censo
@@ -1024,6 +1087,7 @@
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
         
         console.log("Exportação para CSV concluída com sucesso.");
     }
@@ -1399,7 +1463,7 @@
                 </div>
                 <div class="param-item">
                     <span class="param-label">Fonte de Dados</span>
-                    <span class="param-val">Total Real IBGE (Censo 2022)</span>
+                    <span class="param-val">Base municipal — referência declarada: Censo 2022</span>
                 </div>
                 ` : `
                 <div class="param-item">
@@ -1450,7 +1514,7 @@
                 <div style="font-size: 11px; color: #334155; margin-bottom: 6px;">
                     Interior: <strong>${popInteriorEst.toLocaleString('pt-BR')} hab.</strong> | Capitais: ${popCapitalEst.toLocaleString('pt-BR')} hab.
                 </div>
-                <div style="font-size: 9px; color: #64748b; line-height: 1.4;">${modoMunicipal ? `População total real oficial de todo o território do município do Censo 2022 (IBGE).` : `Soma populacional de todos os setores censitários interceptados pela área de influência ativa.`}</div>
+                <div style="font-size: 9px; color: #64748b; line-height: 1.4;">${modoMunicipal ? `População municipal registrada na base, com referência declarada ao Censo 2022.` : `Soma populacional de todos os setores censitários cujo centroide está na área de influência ativa.`}</div>
             </div>
             <div class="stat-card" style="border-left: 4px solid var(--accent-cyan); text-align: left; background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.02); padding: 16px; border: 1px solid var(--border); border-radius: 10px;">
                 <div class="stat-label" style="color: var(--accent-cyan); font-weight: 700; font-size: 10px; text-transform: uppercase; margin-bottom: 6px;">Total de Domicílios</div>
@@ -1458,7 +1522,7 @@
                 <div style="font-size: 11px; color: #334155; margin-bottom: 6px;">
                     Interior: <strong>${domInteriorEst.toLocaleString('pt-BR')} res.</strong> | Capitais: ${domCapitalEst.toLocaleString('pt-BR')} res.
                 </div>
-                <div style="font-size: 9px; color: #64748b; line-height: 1.4;">${modoMunicipal ? `Total real de domicílios de todo o território do município do Censo 2022 (IBGE) (${setoresAfetadosEst} setores urbanos e rurais).` : `Quantidade de domicílios nos setores censitários intersectados (${setoresAfetadosEst} setores afetados).`}</div>
+                <div style="font-size: 9px; color: #64748b; line-height: 1.4;">${modoMunicipal ? `Total real de domicílios de todo o território do município do Censo 2022 (IBGE) (${setoresAfetadosEst} setores disponíveis no recorte de 50 km).` : `Quantidade de domicílios nos setores com centroide dentro do buffer (${setoresAfetadosEst} setores selecionados).`}</div>
             </div>
         </div>
 
@@ -1497,7 +1561,7 @@
         </div>
         
         <div style="font-size: 10px; color: #64748b; margin-top: 10px; padding: 0 4px; line-height: 1.5; page-break-inside: avoid;">
-            <strong>* Nota Explicativa (Consolidação de Sede):</strong> Para as localidades classificadas como <strong>Sede Municipal</strong> (marcadas com <strong>*</strong>), os valores representam a população e os domicílios agregados de <strong>todos os setores censitários do núcleo urbano consolidado</strong> daquele município. Para as demais categorias (Vilas e Lugares Rurais), os valores indicam o setor censitário rural pontual exato onde a comunidade está geograficamente assentada.
+            <strong>* Nota Explicativa (Consolidação de Sede):</strong> Para as localidades classificadas como <strong>Sede Municipal</strong> (marcadas com <strong>*</strong>), os valores representam a população e os domicílios agregados de <strong>setores urbanos disponíveis no recorte de 50 km</strong> daquele município. Para as demais categorias (Vilas e Lugares Rurais), os valores indicam os totais do setor que contém o ponto da localidade, quando encontrado. Esses totais não são exclusivos da comunidade e não devem ser somados entre localidades, pois várias podem compartilhar o mesmo setor.
         </div>
 
     </div>
@@ -1506,16 +1570,8 @@
 </html>
         `;
 
-        // Abrir a nova aba e injetar o HTML
-        const novaAba = window.open();
-        if (novaAba) {
-            novaAba.document.write(htmlContent);
-            novaAba.document.close();
-            console.log("Relatório gerado e aberto com sucesso em uma nova aba.");
-        } else {
-            alert("Não foi possível abrir o relatório em uma nova aba. Verifique se o bloqueador de popups do seu navegador está ativo!");
-            console.warn("Popups bloqueados pelo navegador. Não foi possível abrir o relatório.");
-        }
+        window.showAnalysisReport(htmlContent.replace('<body>', '<body>' + (window.analysisAuditHTML ? window.analysisAuditHTML() : '')));
+        console.log('Relatório gerado para visualização e impressão.');
     }
 
     // Inicializar o módulo

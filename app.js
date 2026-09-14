@@ -20,6 +20,7 @@ window.geoportalLayers = {
 // Cache de dados de setores censitários carregados por UF
 window._setoresCache = {};
 window._municipiosCache = {};
+window._localidadesCache = {};
 
 // Gerenciador de Estado Centralizado (Previne loops e sincroniza Sidebar / Floating Menu / Leaflet)
 const GeoportalState = {
@@ -110,19 +111,10 @@ const map = L.map('map', {
     preferCanvas: true // Renderização em Canvas para altíssima performance de linhas
 });
 window.map = map;
+L.control.scale({imperial: false}).addTo(map);
 
 // ETAPA 3: Provedores de Mapas Base (Basemaps)
 const basemaps = {
-    "Escuro": L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-        attribution: '&copy; OpenStreetMap &copy; CARTO',
-        subdomains: 'abcd',
-        maxZoom: 20
-    }),
-    "Claro": L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-        attribution: '&copy; OpenStreetMap &copy; CARTO',
-        subdomains: 'abcd',
-        maxZoom: 20
-    }),
     "Satélite": L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
         attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
     }),
@@ -140,7 +132,7 @@ const basemaps = {
 };
 
 // Adicionar Basemap Padrão
-basemaps["Escuro"].addTo(map);
+basemaps["OpenStreetMap"].addTo(map);
 
 // MELHORIA 1.1: Basemaps posicionados no canto INFERIOR ESQUERDO
 // Isso evita conflitos com a sidebar (aba do geoportal) no lado direito e mantém o alinhamento esquerdo
@@ -299,7 +291,7 @@ async function carregarBasesGeograficas() {
         window.geoportalData.infovias         = resLinhas;
         window.geoportalData.pontosEstrategicos = resPontos;
 
-        setProgress(50, "Configurando traçados das InfoVias no mapa...");
+        setProgress(35, "Configurando traçados das InfoVias no mapa...");
 
         // Renderizar infovias e pontos estratégicos imediatamente
         configurarInfovias(resLinhas);
@@ -308,44 +300,62 @@ async function carregarBasesGeograficas() {
         adicionarLegendaAoMapa();
         inicializarMenusColapsaveis();
 
-        // FASE 2: Carregar localidades em segundo plano (~6 MB)
-        setProgress(60, "Carregando Comunidades (11.186 localidades)...");
-
-        const resLocalidades = await fetch('localidades.geojson' + cacheBust).then(r => r.json());
-        window.geoportalData.localidades = resLocalidades;
-
-        setProgress(90, "Configurando clusters de comunidades...");
-
-        configurarLocalidades(resLocalidades);
-        configurarMapaDeCalor(resLocalidades);
-        inicializarBuscaLocalidades(resLocalidades);
+        // FASE 2: Carregar localidades de forma progressiva e sequencial
+        setProgress(50, "Iniciando carregamento progressivo de comunidades...");
         
-        // Filtragem inicial das localidades (Melhoria 5.0)
-        if (window.filtrarLocalidadesNoMapa) {
-            window.filtrarLocalidadesNoMapa("all", "all");
-        }
+        window.geoportalData.localidades = { type: "FeatureCollection", features: [] };
+        inicializarClusterLocalidades();
+        inicializarBuscaLocalidades(); // Habilita campo de busca antes
 
-        setProgress(100, "Pronto!");
+        // UFs a carregar em ordem
+        const ufs = ["AM", "PA", "AP", "RR"];
 
-        // Esconder o overlay com fade out suave
-        setTimeout(() => {
-            if (loadingOverlay) {
-                loadingOverlay.classList.add("fade-out");
-                setTimeout(() => {
-                    loadingOverlay.style.display = "none";
-                }, 500);
+        (async () => {
+            let loadedCount = 0;
+            for (const uf of ufs) {
+                setProgress(50 + (loadedCount * 12), `Carregando comunidades (${uf})...`);
+                await carregarLocalidadesEstado(uf);
+                loadedCount++;
             }
-        }, 400);
 
-        // Restaurar infovia da URL (Melhoria 2.4)
-        const infoviaDaUrl = urlParams.get('infovia');
-        if (infoviaDaUrl) {
-            const select = document.getElementById("select-infovia");
-            if (select) {
-                select.value = infoviaDaUrl;
-                select.dispatchEvent(new Event("change"));
+            setProgress(100, "Pronto!");
+
+            // Esconder o overlay com fade out suave
+            setTimeout(() => {
+                if (loadingOverlay) {
+                    loadingOverlay.classList.add("fade-out");
+                    setTimeout(() => {
+                        loadingOverlay.style.display = "none";
+                    }, 500);
+                }
+            }, 400);
+
+            // Entrada territorial pelos cartões da página inicial.
+            const ufDaUrl = urlParams.get('uf');
+            if (['AM', 'PA', 'AP', 'RR'].includes(ufDaUrl)) {
+                const selectUf = document.getElementById('select-uf');
+                if (selectUf) {
+                    selectUf.value = ufDaUrl;
+                    await atualizarDropdownMunicipios();
+                    window.filtrarLocalidadesNoMapa?.(ufDaUrl, 'all');
+                    const municipios = window._municipiosCache[ufDaUrl];
+                    if (municipios?.features?.length) {
+                        map.fitBounds(L.geoJSON(municipios).getBounds(), {padding: [35, 35]});
+                    }
+                    window.executarAnaliseEspacial?.();
+                }
             }
-        }
+
+            // Restaurar infovia da URL (Melhoria 2.4)
+            const infoviaDaUrl = urlParams.get('infovia');
+            if (infoviaDaUrl) {
+                const select = document.getElementById("select-infovia");
+                if (select) {
+                    select.value = infoviaDaUrl;
+                    select.dispatchEvent(new Event("change"));
+                }
+            }
+        })();
 
     } catch (err) {
         console.error("Erro crítico ao carregar dados geográficos:", err);
@@ -356,11 +366,15 @@ async function carregarBasesGeograficas() {
 
 
 // MELHORIA 2.2: Busca de localidade por nome
-function inicializarBuscaLocalidades(geojson) {
+// MELHORIA 2.2: Busca de localidade por nome
+function inicializarBuscaLocalidades() {
     const input    = document.getElementById("input-busca-localidade");
     const clearBtn = document.getElementById("btn-clear-busca");
     const dropdown = document.getElementById("busca-resultados");
     if (!input || !dropdown) return;
+
+    if (input.dataset.buscaInicializada) return;
+    input.dataset.buscaInicializada = "true";
 
     let debounce = null;
 
@@ -372,6 +386,9 @@ function inicializarBuscaLocalidades(geojson) {
 
         debounce = setTimeout(() => {
             const termoLower = termo.toLowerCase();
+            const geojson = window.geoportalData.localidades;
+            if (!geojson || !geojson.features) return;
+
             const resultados = geojson.features.filter(f => {
                 const nm  = (f.properties.NM_LOCALIDADE || "").toLowerCase();
                 const mun = (f.properties.NM_MUN        || "").toLowerCase();
@@ -625,8 +642,11 @@ window.obterCorPorCT = function(ct) {
 };
 
 // 5.3 Configuração do MarkerCluster de Localidades
-function configurarLocalidades(geojson) {
-    // Inicializa o grupo de clusters
+window.ufCarregandoStatus = {}; // Estados: 'unloaded', 'loading', 'loaded'
+
+function inicializarClusterLocalidades() {
+    if (window.geoportalLayers.localidadesCluster) return;
+
     const clusterGroup = L.markerClusterGroup({
         maxClusterRadius: 50,
         showCoverageOnHover: false,
@@ -649,45 +669,70 @@ function configurarLocalidades(geojson) {
             });
         }
     });
+    window.geoportalLayers.localidadesCluster = clusterGroup;
 
-    // Função interna para criar o DivIcon com estilo de círculo idêntico ao original
-    function criarIconeLocalidade(fillColor, borderColor, weight, radius, fillOpacity, isHighlighted = false) {
-        const size = (radius * 2) + (weight * 2);
-        const innerSize = radius * 2;
-        const borderStyle = `${weight}px solid ${borderColor}`;
-        
-        const html = `
-            <div class="localidade-icon ${isHighlighted ? 'highlighted' : ''}" style="
-                width: ${innerSize}px;
-                height: ${innerSize}px;
-                background-color: ${fillColor};
-                border: ${borderStyle};
-                opacity: ${fillOpacity};
-                box-sizing: border-box;
-            "></div>
-        `;
-        
-        return L.divIcon({
-            html: html,
-            className: 'localidade-marker-container',
-            iconSize: [size, size],
-            iconAnchor: [size / 2, size / 2]
-        });
+    if (window.GeoportalState.state.camadaPontos) {
+        window.map.addLayer(clusterGroup);
     }
+}
 
-    // Criar os marcadores de localidades e colocá-los no cluster.
-    // Usamos L.marker + DivIcon para garantir hit-detection precisa para cliques/popups no DOM,
-    // já que o MarkerCluster tem incompatibilidades de eventos com vetores sob preferCanvas: true.
-    const geojsonLayer = L.geoJSON(geojson, {
-        pointToLayer: function(feature, latlng) {
-            // Obter cor correspondente à categoria censo (CT_LOCALIDADE)
+// Função interna para criar o DivIcon com estilo de círculo idêntico ao original
+function criarIconeLocalidade(fillColor, borderColor, weight, radius, fillOpacity, isHighlighted = false) {
+    const size = (radius * 2) + (weight * 2);
+    const innerSize = radius * 2;
+    const borderStyle = `${weight}px solid ${borderColor}`;
+
+    const html = `
+        <div class="localidade-icon ${isHighlighted ? 'highlighted' : ''}" style="
+            width: ${innerSize}px;
+            height: ${innerSize}px;
+            background-color: ${fillColor};
+            border: ${borderStyle};
+            opacity: ${fillOpacity};
+            box-sizing: border-box;
+        "></div>
+    `;
+
+    return L.divIcon({
+        html: html,
+        className: 'localidade-marker-container',
+        iconSize: [size, size],
+        iconAnchor: [size / 2, size / 2]
+    });
+}
+
+// Carrega as localidades de um estado específico sob demanda ou progressivamente
+const localityRequests = new Map();
+function carregarLocalidadesEstado(uf) {
+    if (localityRequests.has(uf)) return localityRequests.get(uf);
+    const request = carregarLocalidadesEstadoImpl(uf).finally(() => localityRequests.delete(uf));
+    localityRequests.set(uf, request);
+    return request;
+}
+async function carregarLocalidadesEstadoImpl(uf) {
+    if (window.ufCarregandoStatus[uf] === 'loaded' || window.ufCarregandoStatus[uf] === 'loading') {
+        return;
+    }
+    window.ufCarregandoStatus[uf] = 'loading';
+
+    console.log(`[Lazy Load] Carregando localidades de ${uf}...`);
+    try {
+        const cacheBust = "?v=" + Date.now();
+        const res = await fetch(`localidades_por_uf/localidades_${uf}.geojson` + cacheBust);
+        if (!res.ok) throw new Error(`Status ${res.status}`);
+        const geojson = await res.json();
+
+        // Inicializar cluster se não estiver inicializado
+        inicializarClusterLocalidades();
+
+        // Criar marcadores para este estado
+        const markers = [];
+        geojson.features.forEach(feature => {
             const defaultColor = window.obterCorPorCT(feature.properties.CT_LOCALIDADE);
-
-            const marker = L.marker(latlng, {
+            const marker = L.marker(L.latLng(feature.geometry.coordinates[1], feature.geometry.coordinates[0]), {
                 icon: criarIconeLocalidade(defaultColor, '#ffffff', 1.5, 7, 0.92)
             });
 
-            // Armazenar as propriedades de estilo nas opções para permitir leitura futura
             marker.options.style = {
                 fillColor: defaultColor,
                 color: '#ffffff',
@@ -696,15 +741,11 @@ function configurarLocalidades(geojson) {
                 fillOpacity: 0.92
             };
 
-            // Implementação de setStyle para compatibilidade total com analysis.js
             marker.setStyle = function(style) {
                 const currentStyle = this.options.style || {};
                 const newStyle = Object.assign({}, currentStyle, style);
                 this.options.style = newStyle;
-                
-                // Se o estilo de cor da borda for alterado para o cyan neon (#00f2fe), consideramos destacado
                 const isHighlighted = (newStyle.color === '#00f2fe' || newStyle.isHighlighted === true);
-                
                 const newIcon = criarIconeLocalidade(
                     newStyle.fillColor || defaultColor,
                     newStyle.color || '#ffffff',
@@ -716,23 +757,15 @@ function configurarLocalidades(geojson) {
                 this.setIcon(newIcon);
             };
 
-            // Referência ao marcador para destacar no filtro de buffer
-            feature._markerRef = marker;
-            return marker;
-        },
-        onEachFeature: function(feature, layer) {
-            const props  = feature.properties;
-            // Popup reativo dinâmico para calcular e exibir a distância até as InfoVias no momento do clique
-            layer.bindPopup(function(layerRef) {
+            // Popup reativo
+            marker.bindPopup(function(layerRef) {
                 const fProps = layerRef.feature.properties;
                 const fLatLng = layerRef.getLatLng();
                 const fMapsUrl = `https://www.google.com/maps/search/?api=1&query=${fLatLng.lat},${fLatLng.lng}`;
-                
                 const fCatMapa = fProps.CATEGORIA_MAPA || 'Rural';
                 const fRotuloCat = fCatMapa === 'Sede' ? 'Sede Municipal' : (fCatMapa === 'Vila' ? 'Vila' : 'Lugar Rural');
                 const fClasseBadge = fCatMapa.toLowerCase();
                 
-                // Calcular distância até a infovia em tempo real
                 let distInfoviaText = "N/A";
                 if (window.obterDistanciaAInfoViaMaisProxima) {
                     const distVal = window.obterDistanciaAInfoViaMaisProxima(layerRef.feature);
@@ -772,23 +805,56 @@ function configurarLocalidades(geojson) {
                 `;
             }, { maxWidth: 340, autoPan: true });
 
-            // Tooltip leve ao hover para confirmação visual antes do clique
-            layer.bindTooltip(props.NM_LOCALIDADE || 'Localidade', {
+            marker.bindTooltip(feature.properties.NM_LOCALIDADE || 'Localidade', {
                 sticky: false,
                 direction: 'top',
                 offset: [0, -8],
                 opacity: 0.9,
                 className: 'localidade-tooltip'
             });
+
+            feature._markerRef = marker;
+            marker.feature = feature; // Referência circular
+            markers.push(marker);
+        });
+
+        // Armazenar no cache e adicionar ao master
+        window._localidadesCache[uf] = geojson;
+        window.geoportalData.localidades.features.push(...geojson.features);
+
+        // Adicionar os marcadores ao cluster group
+        window.geoportalLayers.localidadesCluster.addLayers(markers);
+
+        // Re-configurar o Heatmap
+        atualizarHeatmapGlobal();
+
+        // Re-inicializar a busca de localidades com a lista atualizada
+        inicializarBuscaLocalidades();
+
+        window.ufCarregandoStatus[uf] = 'loaded';
+        console.log(`[Lazy Load] Localidades de ${uf} carregadas e renderizadas.`);
+
+        // Chamar filtragem no mapa para aplicar filtros atuais (UF, Categoria, Proximidade)
+        if (window.filtrarLocalidadesNoMapa) {
+            const currentUf = document.getElementById("select-uf")?.value || "all";
+            const currentCat = document.getElementById("select-categoria-ct")?.value || "all";
+            window.filtrarLocalidadesNoMapa(currentUf, currentCat);
         }
-    });
 
-    clusterGroup.addLayer(geojsonLayer);
-    window.geoportalLayers.localidadesCluster = clusterGroup;
-
-    if (GeoportalState.state.camadaPontos) {
-        map.addLayer(clusterGroup);
+    } catch (err) {
+        window.ufCarregandoStatus[uf] = 'unloaded';
+        console.error(`Erro ao carregar localidades do estado ${uf}:`, err);
     }
+}
+
+// Expõe globalmente a função de carregamento para uso em outros módulos
+window.carregarLocalidadesEstado = carregarLocalidadesEstado;
+
+function atualizarHeatmapGlobal() {
+    if (window.geoportalLayers.heatmapLayer) {
+        window.map.removeLayer(window.geoportalLayers.heatmapLayer);
+    }
+    configurarMapaDeCalor(window.geoportalData.localidades);
 }
 
 // Função global para filtrar os pontos de localidades mostrados no cluster do mapa com base no estado e na categoria selecionados
@@ -1201,8 +1267,17 @@ document.addEventListener("DOMContentLoaded", () => {
     
     if (selectUf) {
         selectUf.addEventListener("change", async () => {
+            const ufVal = selectUf.value;
+            if (selectMun) { selectMun.value = 'all'; selectMun.disabled = true; }
+            if (window.executarAnaliseEspacial) window.executarAnaliseEspacial();
+            if (ufVal !== "all" && window.ufCarregandoStatus[ufVal] !== 'loaded') {
+                await carregarLocalidadesEstado(ufVal);
+            }
+
+            if (selectUf.value !== ufVal) return;
             // Atualizar o dropdown de municipios
             await atualizarDropdownMunicipios();
+            if (window.executarAnaliseEspacial) window.executarAnaliseEspacial();
 
             if (GeoportalState.state.camadaSetores) {
                 carregarSetoresCensitarios();
@@ -1381,6 +1456,7 @@ async function atualizarDropdownMunicipios() {
         }
     }
 
+    if (selectUf.value !== uf) return;
     if (!data || !data.features) {
         selectMun.innerHTML = '<option value="all">Erro ao carregar municípios</option>';
         return;
